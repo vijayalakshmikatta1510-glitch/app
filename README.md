@@ -3,6 +3,7 @@ Application: https://app.emergent.sh/share-preview?app=exp%3A%2F%2Fpulse-care-4.
 
 Wireframe reference: https://pulse-ten-teal-54.vercel.app/
 
+Wireframe consists of everything from scratch, but app application is a simple version
 
 🎯 1. **Overview**: 
 Pulse is a health-awareness companion designed to help people build sustainable everyday health habits, understand self-reported trends, and prepare for more informed conversations with healthcare professionals.
