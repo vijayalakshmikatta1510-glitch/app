@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Linking, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
+import * as Sharing from "expo-sharing";
 
-import { api, UploadRecord } from "@/src/api";
+import { API_BASE, api, TOKEN_KEY, UploadRecord } from "@/src/api";
+import { storage } from "@/src/utils/storage";
 import { colors } from "@/src/theme";
 
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -12,6 +15,7 @@ export function ReportsSection() {
   const [uploads, setUploads] = useState<UploadRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [viewingId, setViewingId] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [photoExplain, setPhotoExplain] = useState(false);
@@ -45,6 +49,43 @@ export function ReportsSection() {
       setError(requestError instanceof Error ? requestError.message : "We could not upload this file.");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const viewItem = async (item: UploadRecord) => {
+    setError("");
+    setMessage("");
+    setViewingId(item.id);
+    try {
+      const token = await storage.secureGet<string | null>(TOKEN_KEY, null);
+      const url = `${API_BASE}/uploads/${item.id}/download`;
+      if (Platform.OS === "web") {
+        const response = await fetch(url, { headers: { Authorization: `Bearer ${token ?? ""}` } });
+        if (!response.ok) throw new Error("We could not open this file. Please try again.");
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = objectUrl;
+        anchor.download = item.original_name;
+        anchor.rel = "noopener";
+        anchor.click();
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+        setMessage("Download started.");
+      } else {
+        const safeName = item.original_name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const target = `${FileSystem.cacheDirectory}${item.id}-${safeName}`;
+        const result = await FileSystem.downloadAsync(url, target, { headers: { Authorization: `Bearer ${token ?? ""}` } });
+        if (result.status !== 200) throw new Error("We could not open this file. Please try again.");
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(result.uri, { mimeType: item.content_type, dialogTitle: item.original_name });
+        } else {
+          setMessage("File downloaded to your device.");
+        }
+      }
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "We could not open this file.");
+    } finally {
+      setViewingId("");
     }
   };
 
@@ -110,7 +151,7 @@ export function ReportsSection() {
   return (
     <View testID="reports-section">
       <Text style={styles.sectionTitle}>Health reports</Text>
-      <Text style={styles.sectionCopy}>Add lab reports or prescriptions (JPEG, PNG or PDF, up to 10 MB). Files are stored privately and only you can open them.</Text>
+      <Text style={styles.sectionCopy}>Add lab reports or prescriptions (JPEG, PNG or PDF, up to 10 MB). Files are stored privately — tap a report to view or save it.</Text>
       <View style={styles.actions}>
         <Pressable testID="reports-add-photo" disabled={busy} onPress={pickPhoto} style={({ pressed }) => [styles.action, pressed && styles.pressed, busy && styles.disabled]}>
           <Text style={styles.actionText}>Add photo</Text>
@@ -140,13 +181,17 @@ export function ReportsSection() {
       ) : uploads.length ? (
         uploads.map((item) => (
           <View key={item.id} style={styles.row}>
-            <View style={styles.rowCopy}>
+            <Pressable testID={`reports-view-${item.id}`} disabled={viewingId === item.id} onPress={() => viewItem(item)} style={({ pressed }) => [styles.rowCopy, pressed && styles.pressed]}>
               <Text style={styles.rowName} numberOfLines={1}>{item.original_name}</Text>
-              <Text style={styles.rowMeta}>{item.content_type === "application/pdf" ? "PDF" : "Image"} · {Math.max(1, Math.round(item.size / 1024))} KB · {item.validation_status}</Text>
-            </View>
-            <Pressable testID={`reports-delete-${item.id}`} onPress={() => remove(item.id)} style={styles.delete}>
-              <Text style={styles.deleteText}>Delete</Text>
+              <Text style={styles.rowMeta}>{item.content_type === "application/pdf" ? "PDF" : "Image"} · {Math.max(1, Math.round(item.size / 1024))} KB · {item.validation_status} · Tap to view</Text>
             </Pressable>
+            {viewingId === item.id ? (
+              <ActivityIndicator color={colors.brandPrimary} />
+            ) : (
+              <Pressable testID={`reports-delete-${item.id}`} onPress={() => remove(item.id)} style={styles.delete}>
+                <Text style={styles.deleteText}>Delete</Text>
+              </Pressable>
+            )}
           </View>
         ))
       ) : (
@@ -176,7 +221,7 @@ const styles = StyleSheet.create({
   error: { color: colors.error, marginTop: 14, lineHeight: 20 },
   message: { color: colors.info, marginTop: 14, lineHeight: 20 },
   row: { minHeight: 58, borderBottomWidth: 1, borderBottomColor: colors.divider, flexDirection: "row", alignItems: "center", gap: 12 },
-  rowCopy: { flex: 1 },
+  rowCopy: { flex: 1, minHeight: 48, justifyContent: "center" },
   rowName: { color: colors.onSurface, fontWeight: "700" },
   rowMeta: { color: colors.muted, fontSize: 12, marginTop: 3 },
   delete: { minHeight: 40, minWidth: 68, borderRadius: 20, borderWidth: 1, borderColor: colors.error, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 },

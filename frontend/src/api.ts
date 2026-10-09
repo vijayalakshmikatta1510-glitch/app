@@ -66,13 +66,22 @@ export const api = {
   uploadReport: (form: FormData) => request<UploadRecord>("/uploads", { method: "POST", body: form }),
   deleteUpload: (id: string) => request<{ message: string }>(`/uploads/${id}`, { method: "DELETE" }),
   timeline: () => request<{ events: TimelineEvent[] }>("/timeline"),
-  doctors: () => request<{ doctors: Doctor[] }>("/doctors"),
+  doctors: (filters?: { city?: string; speciality?: string; language?: string }) => {
+    const params = new URLSearchParams();
+    if (filters?.city) params.set("city", filters.city);
+    if (filters?.speciality) params.set("speciality", filters.speciality);
+    if (filters?.language) params.set("language", filters.language);
+    const query = params.toString();
+    return request<{ doctors: Doctor[] }>(`/doctors${query ? `?${query}` : ""}`);
+  },
   appointments: () => request<{ appointments: Appointment[] }>("/appointments"),
   book: (body: Record<string, unknown>) => request<Appointment>("/appointments", { method: "POST", body: JSON.stringify(body) }),
   cancelAppointment: (id: string) => request<{ message: string }>(`/appointments/${id}`, { method: "DELETE" }),
   groups: () => request<{ groups: CommunityGroup[] }>("/community/groups"),
   joinGroup: (id: string) => request<{ message: string }>(`/community/groups/${id}/join`, { method: "POST" }),
   leaveGroup: (id: string) => request<{ message: string }>(`/community/groups/${id}/join`, { method: "DELETE" }),
+  posts: (groupId: string) => request<{ posts: CommunityPost[] }>(`/community/posts?group_id=${encodeURIComponent(groupId)}`),
+  createPost: (body: { group_id: string; body: string }) => request<CommunityPost>("/community/posts", { method: "POST", body: JSON.stringify(body) }),
   consents: () => request<{ consents: Consent[] }>("/consents"),
   updateConsent: (body: Record<string, unknown>) => request<Consent>("/consents", { method: "PUT", body: JSON.stringify(body) }),
 };
@@ -85,4 +94,5 @@ export type Doctor = { id: string; name: string; designation: string; speciality
 export type Appointment = { id: string; doctor_name: string; requested_date: string; consultation_mode: string; status: string };
 export type CommunityGroup = { id: string; name: string; topic: string; city?: string; joined: boolean };
 export type Consent = { consent_type: string; granted: boolean; updated_at: string };
+export type CommunityPost = { id: string; group_id: string; author_name: string; body: string; created_at: string };
 export type UploadRecord = { id: string; purpose: string; confirmed_date?: string | null; original_name: string; content_type: string; size: number; validation_status: string; created_at: string };

@@ -27,6 +27,13 @@ Pulse is a mobile health-awareness application that helps people build a persona
 6. Database-backed doctors, pending appointment requests, community membership, and consent controls.
 7. Explicit loading, empty, retry/error, and non-diagnostic messaging.
 
+## Implemented 2026-10-09 (feature pass 3, verified)
+
+- **Care filters**: City / Speciality / Language chip rows (horizontal scroll, selected = color change only) query the backend `/doctors` filter params; tap-again clears. Verified: city filter narrows 6 → 1, clearing restores all; empty-filter state copy.
+- **Report viewing**: tapping a saved report downloads/ shares it — web fetches the protected endpoint with the bearer token and saves via object URL; native downloads to cache (`expo-file-system/legacy`) and opens the share sheet (`expo-sharing`). Verified with a real PNG upload → list → tap → download round-trip.
+- **Community content**: `backend/scripts/seed_community.py` seeds 2 sample groups + 4 "Pulse Community" welcome posts (idempotent). Community UI extracted to `community-section.tsx`: join/leave, expandable conversation feed, post composer (membership-gated, backend 403 enforced before join/after leave — verified).
+- Verified: 12 backend community/filter checks, full UI pass (filters, join → feed → post, document upload → download), lint clean, smoke 3/3.
+
 ## Implemented 2026-10-09 (feature pass 2, verified)
 
 - **Doctor directory seed**: `backend/scripts/seed_doctors.py` idempotently upserts 6 sample verified directory profiles (multi-speciality/city, `data_source: sample_seed`, availability marked indicative/not real-time) so booking is testable end-to-end. Ran once; directory holds 6 records.
