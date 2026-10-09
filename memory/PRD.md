@@ -27,6 +27,12 @@ Pulse is a mobile health-awareness application that helps people build a persona
 6. Database-backed doctors, pending appointment requests, community membership, and consent controls.
 7. Explicit loading, empty, retry/error, and non-diagnostic messaging.
 
+## Implemented 2026-10-09 (feature pass 4, verified)
+
+- **Post moderation**: every community post now has Report and Block author controls. `POST /community/posts/{id}/report` upserts a pending-review record per reporter (idempotent, 404 on unknown post); `POST /community/posts/{id}/block` resolves the author server-side (IDs never exposed), stores a `user_blocks` entry, and the posts feed excludes blocked authors per requester. Verified: report idempotency, block hides author for blocker only, self-block rejected (400), author's own view unaffected.
+- **Assessment history trend**: Home shows a "Your score trend" card (react-native-svg polyline, grid lines, first/latest/delta legend) once the user has 2+ assessments; history refreshes immediately after a retake. Verified: 2 assessments → chart renders with 85 → 62 delta; history endpoint is owner-isolated.
+- Verified: 11 backend moderation/history checks, full UI pass (2× assessment rounds, trend chart, report → "Reported for review", block → feed removal), lint clean, smoke 3/3.
+
 ## Implemented 2026-10-09 (feature pass 3, verified)
 
 - **Care filters**: City / Speciality / Language chip rows (horizontal scroll, selected = color change only) query the backend `/doctors` filter params; tap-again clears. Verified: city filter narrows 6 → 1, clearing restores all; empty-filter state copy.

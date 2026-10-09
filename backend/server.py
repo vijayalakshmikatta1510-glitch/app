@@ -135,6 +135,10 @@ class CommunityPostRequest(BaseModel):
     body: str = Field(min_length=1, max_length=1000)
 
 
+class ReportPostRequest(BaseModel):
+    reason: str = Field(default="member_flag", max_length=200)
+
+
 ASSESSMENT_QUESTIONS = [
     {"id": "q1", "prompt": "How often do you check in with how you feel?", "type": "single", "options": ["Daily", "Weekly", "Rarely"]},
     {"id": "q2", "prompt": "How would you describe your recent movement?", "type": "single", "options": ["Consistent", "Some days", "Not yet"]},
@@ -499,7 +503,11 @@ async def leave_group(group_id: str, user: Dict[str, Any] = Depends(current_user
 
 @api_router.get("/community/posts")
 async def community_posts(group_id: Optional[str] = None, user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
-    query = {"group_id": group_id} if group_id else {}
+    query: Dict[str, Any] = {"group_id": group_id} if group_id else {}
+    blocks = await db.user_blocks.find({"user_id": user["id"]}, {"_id": 0, "blocked_user_id": 1}).to_list(200)
+    blocked_ids = [item["blocked_user_id"] for item in blocks]
+    if blocked_ids:
+        query["author_user_id"] = {"$nin": blocked_ids}
     posts = await db.community_posts.find(query, {"_id": 0, "author_user_id": 0}).sort("created_at", -1).to_list(100)
     return {"posts": posts}
 
@@ -514,6 +522,36 @@ async def create_community_post(payload: CommunityPostRequest, user: Dict[str, A
     record.pop("_id", None)
     record.pop("author_user_id", None)
     return record
+
+
+@api_router.post("/community/posts/{post_id}/report")
+async def report_community_post(post_id: str, payload: ReportPostRequest, user: Dict[str, Any] = Depends(current_user)) -> Dict[str, str]:
+    post = await db.community_posts.find_one({"id": post_id}, {"_id": 0, "id": 1, "group_id": 1})
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    reason = payload.reason.strip() or "member_flag"
+    await db.reports.update_one(
+        {"post_id": post_id, "reporter_user_id": user["id"]},
+        {"$set": {"post_id": post_id, "group_id": post["group_id"], "reporter_user_id": user["id"], "reason": reason, "status": "pending_review", "updated_at": now_iso()}, "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now_iso()}},
+        upsert=True,
+    )
+    return {"message": "Reported for review"}
+
+
+@api_router.post("/community/posts/{post_id}/block")
+async def block_post_author(post_id: str, user: Dict[str, Any] = Depends(current_user)) -> Dict[str, str]:
+    post = await db.community_posts.find_one({"id": post_id}, {"_id": 0})
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    author_id = post.get("author_user_id")
+    if not author_id or author_id == user["id"]:
+        raise HTTPException(status_code=400, detail="You cannot block this author")
+    await db.user_blocks.update_one(
+        {"user_id": user["id"], "blocked_user_id": author_id},
+        {"$set": {"user_id": user["id"], "blocked_user_id": author_id, "created_at": now_iso()}},
+        upsert=True,
+    )
+    return {"message": "You will no longer see posts from this member"}
 
 
 @api_router.get("/consents")

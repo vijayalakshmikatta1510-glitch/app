@@ -9,26 +9,33 @@ export function CommunitySection() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [messageOk, setMessageOk] = useState(false);
   const [openGroupId, setOpenGroupId] = useState("");
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [postsLoading, setPostsLoading] = useState(false);
   const [draft, setDraft] = useState("");
   const [posting, setPosting] = useState(false);
+  const [reportedIds, setReportedIds] = useState<string[]>([]);
+  const [actionBusyId, setActionBusyId] = useState("");
 
   useEffect(() => {
-    api.groups().then((result) => setGroups(result.groups)).catch(() => setMessage("We could not load communities.")).finally(() => setLoading(false));
+    api.groups().then((result) => setGroups(result.groups)).catch(() => { setMessageOk(false); setMessage("We could not load communities."); }).finally(() => setLoading(false));
   }, []);
+
+  const fail = (error: unknown, fallback: string) => {
+    setMessageOk(false);
+    setMessage(error instanceof Error ? error.message : fallback);
+  };
 
   const toggleGroup = async (group: CommunityGroup) => {
     setBusy(true);
-    setMessage("");
     try {
       if (group.joined) await api.leaveGroup(group.id);
       else await api.joinGroup(group.id);
       setGroups((current) => current.map((item) => (item.id === group.id ? { ...item, joined: !item.joined } : item)));
       if (group.joined && openGroupId === group.id) setOpenGroupId("");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not update membership.");
+      fail(error, "Could not update membership.");
     } finally {
       setBusy(false);
     }
@@ -42,11 +49,10 @@ export function CommunitySection() {
     setOpenGroupId(group.id);
     setDraft("");
     setPostsLoading(true);
-    setMessage("");
     try {
       setPosts((await api.posts(group.id)).posts);
-    } catch {
-      setMessage("We could not load the conversation.");
+    } catch (error) {
+      fail(error, "We could not load the conversation.");
     } finally {
       setPostsLoading(false);
     }
@@ -56,22 +62,49 @@ export function CommunitySection() {
     const body = draft.trim();
     if (!body) return;
     setPosting(true);
-    setMessage("");
     try {
       const post = await api.createPost({ group_id: group.id, body });
       setPosts((current) => [post, ...current]);
       setDraft("");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not share your post.");
+      fail(error, "Could not share your post.");
     } finally {
       setPosting(false);
+    }
+  };
+
+  const reportPost = async (post: CommunityPost) => {
+    setActionBusyId(post.id);
+    try {
+      await api.reportPost(post.id);
+      setReportedIds((current) => [...current, post.id]);
+      setMessageOk(true);
+      setMessage("Thanks — this post has been flagged for review.");
+    } catch (error) {
+      fail(error, "Could not send the report.");
+    } finally {
+      setActionBusyId("");
+    }
+  };
+
+  const blockAuthor = async (post: CommunityPost) => {
+    setActionBusyId(post.id);
+    try {
+      await api.blockPostAuthor(post.id);
+      setPosts((current) => current.filter((item) => item.author_name !== post.author_name));
+      setMessageOk(true);
+      setMessage("You will no longer see posts from this member.");
+    } catch (error) {
+      fail(error, "Could not block this member.");
+    } finally {
+      setActionBusyId("");
     }
   };
 
   return (
     <View testID="community-section">
       <Text style={styles.sectionTitle}>Community</Text>
-      {message ? <Text testID="community-message" style={styles.error}>{message}</Text> : null}
+      {message ? <Text testID="community-message" style={messageOk ? styles.note : styles.error}>{message}</Text> : null}
       {loading ? (
         <ActivityIndicator color={colors.brandPrimary} style={styles.loader} />
       ) : groups.length ? (
@@ -100,6 +133,18 @@ export function CommunitySection() {
                     <View key={post.id} style={styles.post}>
                       <Text style={styles.postAuthor}>{post.author_name}</Text>
                       <Text style={styles.postBody}>{post.body}</Text>
+                      <View style={styles.postActions}>
+                        {reportedIds.includes(post.id) ? (
+                          <Text testID={`community-reported-${post.id}`} style={styles.reported}>Reported for review</Text>
+                        ) : (
+                          <Pressable testID={`community-report-${post.id}`} disabled={actionBusyId === post.id} onPress={() => reportPost(post)} style={styles.actionButton}>
+                            <Text style={styles.postAction}>Report</Text>
+                          </Pressable>
+                        )}
+                        <Pressable testID={`community-block-${post.id}`} disabled={actionBusyId === post.id} onPress={() => blockAuthor(post)} style={styles.actionButton}>
+                          <Text style={styles.postAction}>Block author</Text>
+                        </Pressable>
+                      </View>
                     </View>
                   ))
                 ) : (
@@ -129,6 +174,7 @@ const styles = StyleSheet.create({
   sectionTitle: { color: colors.onSurface, fontSize: 20, fontWeight: "700", marginTop: 30, marginBottom: 8 },
   loader: { marginTop: 16 },
   error: { color: colors.error, marginTop: 8, lineHeight: 20 },
+  note: { color: colors.info, marginTop: 8, lineHeight: 20 },
   groupBlock: { borderBottomWidth: 1, borderBottomColor: colors.divider, paddingBottom: 6 },
   group: { paddingVertical: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
   groupCopy: { flex: 1 },
@@ -144,6 +190,10 @@ const styles = StyleSheet.create({
   post: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.divider },
   postAuthor: { color: colors.brandPrimary, fontSize: 12, fontWeight: "800" },
   postBody: { color: colors.onSurface, lineHeight: 20, marginTop: 4 },
+  postActions: { flexDirection: "row", gap: 18, marginTop: 8 },
+  actionButton: { minHeight: 32, justifyContent: "center" },
+  postAction: { color: colors.muted, fontSize: 12, fontWeight: "700" },
+  reported: { color: colors.success, fontSize: 12, fontWeight: "700", alignSelf: "center" },
   emptyFeed: { color: colors.muted, lineHeight: 20, paddingVertical: 10 },
   composer: { marginTop: 12, gap: 10 },
   input: { minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSecondary, color: colors.onSurface, padding: 12, fontSize: 14, textAlignVertical: "top" },

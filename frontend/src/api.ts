@@ -82,6 +82,9 @@ export const api = {
   leaveGroup: (id: string) => request<{ message: string }>(`/community/groups/${id}/join`, { method: "DELETE" }),
   posts: (groupId: string) => request<{ posts: CommunityPost[] }>(`/community/posts?group_id=${encodeURIComponent(groupId)}`),
   createPost: (body: { group_id: string; body: string }) => request<CommunityPost>("/community/posts", { method: "POST", body: JSON.stringify(body) }),
+  reportPost: (id: string, reason = "member_flag") => request<{ message: string }>(`/community/posts/${id}/report`, { method: "POST", body: JSON.stringify({ reason }) }),
+  blockPostAuthor: (id: string) => request<{ message: string }>(`/community/posts/${id}/block`, { method: "POST", body: JSON.stringify({}) }),
+  assessmentHistory: () => request<{ assessments: Assessment[] }>("/assessment/history"),
   consents: () => request<{ consents: Consent[] }>("/consents"),
   updateConsent: (body: Record<string, unknown>) => request<Consent>("/consents", { method: "PUT", body: JSON.stringify(body) }),
 };
