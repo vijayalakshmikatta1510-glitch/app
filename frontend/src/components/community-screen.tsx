@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Svg, { Circle } from "react-native-svg";
 
-import { api, CommunityGroup, CommunityPost, GroupStats, NearYou, User } from "@/src/api";
+import { api, Challenge, CommunityGroup, CommunityPost, GroupStats, NearYou, User } from "@/src/api";
 import { FamilySection } from "@/src/components/family-section";
 import { colors } from "@/src/theme";
 
@@ -205,8 +206,20 @@ function GroupCard({ group, stats, joinBusy, onToggleJoin }: { group: CommunityG
   const [note, setNote] = useState("");
   const [reportedIds, setReportedIds] = useState<string[]>([]);
   const [actionBusyId, setActionBusyId] = useState("");
+  const [challenge, setChallenge] = useState<Challenge | null>(null);
+
+  useEffect(() => {
+    if (!group.joined) {
+      setChallenge(null);
+      return;
+    }
+    api.groupChallenge(group.id).then((result) => setChallenge(result.challenge)).catch(() => undefined);
+  }, [group.joined, group.id]);
 
   const progress = stats ? Math.min(1, stats.weekly_goal ? stats.checkins_this_week / stats.weekly_goal : 0) : 0;
+  const ringProgress = challenge ? Math.min(1, challenge.target ? challenge.my_progress / challenge.target : 0) : 0;
+  const RING_R = 26;
+  const RING_C = 2 * Math.PI * RING_R;
 
   const toggleFeed = async () => {
     if (open) {
@@ -278,7 +291,21 @@ function GroupCard({ group, stats, joinBusy, onToggleJoin }: { group: CommunityG
           <Text style={[styles.joinText, group.joined && styles.joinedText]}>{group.joined ? "Joined ✓" : "Join"}</Text>
         </Pressable>
       </View>
-      {group.joined && stats ? (
+      {group.joined && challenge ? (
+        <View style={styles.challengeCard} testID={`community-challenge-${group.id}`}>
+          <View style={styles.ringWrap}>
+            <Svg width={64} height={64} viewBox="0 0 64 64" style={styles.ringRotate}>
+              <Circle cx={32} cy={32} r={RING_R} stroke={colors.border} strokeWidth={6} fill="none" />
+              <Circle cx={32} cy={32} r={RING_R} stroke={colors.brandPrimary} strokeWidth={6} fill="none" strokeDasharray={RING_C} strokeDashoffset={RING_C * (1 - ringProgress)} strokeLinecap="round" />
+            </Svg>
+            <View style={styles.ringLabel}><Text style={styles.ringText}>{challenge.my_progress}/{challenge.target}</Text></View>
+          </View>
+          <View style={styles.challengeCopy}>
+            <Text style={styles.challengeTitle}>{challenge.title}</Text>
+            <Text style={styles.challengeMeta}>{challenge.participants} {challenge.participants === 1 ? "member" : "members"} in · ends {challenge.end_date} · group total {challenge.group_progress}</Text>
+          </View>
+        </View>
+      ) : group.joined && stats ? (
         <View style={styles.challenge} testID={`community-challenge-${group.id}`}>
           <View style={styles.challengeRow}>
             <Text style={styles.challengeLabel}>Group goal · everyone checks in daily</Text>
@@ -391,4 +418,12 @@ const styles = StyleSheet.create({
   shareTitle: { color: colors.onSurface, fontSize: 16, fontWeight: "700" },
   shareCopy: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 4 },
   disclaimer: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 22, marginBottom: 8 },
+  challengeCard: { flexDirection: "row", alignItems: "center", gap: 14, marginTop: 14, backgroundColor: colors.surfaceTertiary, borderRadius: 14, padding: 12 },
+  ringWrap: { width: 64, height: 64 },
+  ringRotate: { transform: [{ rotate: "-90deg" }] },
+  ringLabel: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" },
+  ringText: { color: colors.onSurface, fontSize: 13, fontWeight: "800" },
+  challengeCopy: { flex: 1 },
+  challengeTitle: { color: colors.onSurface, fontSize: 15, fontWeight: "700" },
+  challengeMeta: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 4 },
 });

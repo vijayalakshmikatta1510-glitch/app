@@ -26,6 +26,20 @@ SAMPLE_GROUPS = [
     {"id": "grp-walk-30-club", "name": "Walk 30 club", "topic": "Thirty minutes of walking, most days", "city": "Bengaluru"},
 ]
 
+
+def current_week() -> tuple[str, str]:
+    from datetime import date, timedelta
+
+    monday = date.today() - timedelta(days=date.today().weekday())
+    return monday.isoformat(), (monday + timedelta(days=6)).isoformat()
+
+
+WEEK_START, WEEK_END = current_week()
+SAMPLE_CHALLENGES = [
+    {"id": "chal-walk30-week", "group_id": "grp-walk-30-club", "title": "Walk 30 — this week", "metric": "checkins", "target": 5, "start_date": WEEK_START, "end_date": WEEK_END},
+    {"id": "chal-sleep-week", "group_id": "grp-sleep-reset", "title": "Wind-down week", "metric": "checkins", "target": 5, "start_date": WEEK_START, "end_date": WEEK_END},
+]
+
 SAMPLE_POSTS = [
     {"id": "post-walk-welcome", "group_id": "grp-morning-walkers", "author_user_id": "sample-seed", "author_name": "Pulse Community", "body": "Welcome! Share one small walking win from this week — even five minutes counts.", "created_at": "2026-10-05T07:30:00+00:00"},
     {"id": "post-walk-tip", "group_id": "grp-morning-walkers", "author_user_id": "sample-seed", "author_name": "Pulse Community", "body": "Gentle reminder: consistency beats intensity. A short daily walk supports mood, sleep, and heart health.", "created_at": "2026-10-06T07:30:00+00:00"},
@@ -41,9 +55,11 @@ async def main() -> None:
         await db.community_groups.update_one({"id": group["id"]}, {"$set": {**group, "data_source": "sample_seed"}}, upsert=True)
     for post in SAMPLE_POSTS:
         await db.community_posts.update_one({"id": post["id"]}, {"$set": {**post, "data_source": "sample_seed"}}, upsert=True)
+    for challenge in SAMPLE_CHALLENGES:
+        await db.challenges.update_one({"id": challenge["id"]}, {"$set": {**challenge, "data_source": "sample_seed"}}, upsert=True)
     groups = await db.community_groups.count_documents({})
     posts = await db.community_posts.count_documents({})
-    print(f"Seeded {len(SAMPLE_GROUPS)} groups and {len(SAMPLE_POSTS)} posts; totals now {groups} groups, {posts} posts.")
+    print(f"Seeded {len(SAMPLE_GROUPS)} groups, {len(SAMPLE_POSTS)} posts, {len(SAMPLE_CHALLENGES)} challenges; totals now {groups} groups, {posts} posts.")
     client.close()
 
 

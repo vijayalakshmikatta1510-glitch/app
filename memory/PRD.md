@@ -27,6 +27,14 @@ Pulse is a mobile health-awareness application that helps people build a persona
 6. Database-backed doctors, pending appointment requests, community membership, and consent controls.
 7. Explicit loading, empty, retry/error, and non-diagnostic messaging.
 
+## Implemented 2026-10-09 (feature pass 6, verified)
+
+- **Family nudges**: `POST /family/nudge` — members can send one gentle nudge per member per day (409 on repeat, 404 self/non-member). Recipient sees a "…sent you a gentle nudge — a small check-in counts" banner; members with a broken streak show "streak paused". Member rows now carry `is_self`.
+- **Circle challenges**: time-boxed `challenges` collection + `GET /community/groups/{id}/challenge` (my progress, group total, participants, window). Seeded "Walk 30 — this week" and "Wind-down week" (current week). Joined circles show an SVG progress ring (my check-ins/target) with members-in, end date, and group total; falls back to the weekly goal bar when no active challenge.
+- **Payments**: user chose to skip RevenueCat for now — the ₹499 Premium choice remains stored with `payment_status: pending` and the 14-day trial logic stays active. To wire later: user clicks "Connect RevenueCat" in the payments panel, then run the playbook's /setup flow (see integration notes from this session).
+- Fixed a react-native-svg web warning (`transform-origin`) by rotating the ring via Svg style instead of Circle rotation/origin props.
+- Verified: 12 backend nudge/challenge checks, UI pass (nudge → Sent ✓, ring 1/5 live), lint clean, smoke 3/3.
+
 ## Implemented 2026-10-09 (feature pass 5, verified)
 
 - **Pulse Circles (main moat)**: Community is now a main tab matching the prototype — near-you banner ("N people near you completed today's Pulse" + streak), Near you / Following / Circles segments, circle cards with real member counts and group check-in goal bars, per-circle feeds, and "Share my journey" opt-in toggle with an auto-generated anonymous handle (e.g. MerryBadger47). Circle posts now show the anonymous handle, never the real name. 6 circles seeded (PCOS & hormones, Sleep reset, Desk-job stress, Walk 30 club + 2 earlier). Disclaimer: peer support, not medical advice; doctors/family never see Circle activity.

@@ -574,6 +574,19 @@ async def group_stats(group_id: str, user: Dict[str, Any] = Depends(current_user
     return {"members": len(member_ids), "checkins_this_week": checkins, "weekly_goal": max(len(member_ids), 1) * 7, "posts": posts}
 
 
+@api_router.get("/community/groups/{group_id}/challenge")
+async def group_challenge(group_id: str, user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
+    today = date.today().isoformat()
+    challenge = await db.challenges.find_one({"group_id": group_id, "start_date": {"$lte": today}, "end_date": {"$gte": today}}, {"_id": 0})
+    if not challenge:
+        return {"challenge": None}
+    member_ids = [item["user_id"] for item in await db.memberships.find({"group_id": group_id}, {"_id": 0, "user_id": 1}).to_list(500)]
+    window = {"$gte": challenge["start_date"], "$lte": challenge["end_date"]}
+    my_progress = await db.checkins.count_documents({"user_id": user["id"], "check_in_date": window})
+    group_progress = await db.checkins.count_documents({"user_id": {"$in": member_ids}, "check_in_date": window}) if member_ids else 0
+    return {"challenge": {**challenge, "my_progress": my_progress, "group_progress": group_progress, "participants": len(member_ids)}}
+
+
 @api_router.post("/community/groups/{group_id}/join")
 async def join_group(group_id: str, user: Dict[str, Any] = Depends(current_user)) -> Dict[str, str]:
     group = await db.community_groups.find_one({"id": group_id}, {"_id": 0, "id": 1})
@@ -672,8 +685,9 @@ async def family_payload(user: Dict[str, Any]) -> Dict[str, Any]:
         family = await db.families.find_one({"id": invite["family_id"]}, {"_id": 0})
         inviter = await db.users.find_one({"id": invite["invited_by"]}, {"_id": 0})
         received.append({"id": invite["id"], "family_name": family["name"] if family else "Family circle", "from_name": inviter["full_name"] if inviter else "A Pulse member"})
+    nudges = await db.family_nudges.find({"to_user_id": user["id"]}, {"_id": 0, "id": 1, "from_name": 1, "created_at": 1}).sort("created_at", -1).to_list(10)
     if not membership:
-        return {"family": None, "members": [], "invites_sent": [], "invites_received": received, "is_admin": False}
+        return {"family": None, "members": [], "invites_sent": [], "invites_received": received, "is_admin": False, "nudges": nudges}
     family = await db.families.find_one({"id": membership["family_id"]}, {"_id": 0})
     members = await db.family_members.find({"family_id": membership["family_id"]}, {"_id": 0}).to_list(50)
     week_start = (date.today() - timedelta(days=date.today().weekday())).isoformat()
@@ -683,9 +697,9 @@ async def family_payload(user: Dict[str, Any]) -> Dict[str, Any]:
         summary = await pulse_summary(member["user_id"])
         latest = await db.assessments.find_one({"user_id": member["user_id"]}, {"_id": 0, "total_score": 1}, sort=[("created_at", -1)])
         week_checkins = await db.checkins.count_documents({"user_id": member["user_id"], "check_in_date": {"$gte": week_start}})
-        member_rows.append({"user_id": member["user_id"], "name": member_user["full_name"] if member_user else "Member", "role": member["role"], "streak": summary["streak"], "checkins_this_week": week_checkins, "latest_score": latest["total_score"] if latest else None, "joined_at": member["joined_at"]})
+        member_rows.append({"user_id": member["user_id"], "name": member_user["full_name"] if member_user else "Member", "role": member["role"], "is_self": member["user_id"] == user["id"], "streak": summary["streak"], "checkins_this_week": week_checkins, "latest_score": latest["total_score"] if latest else None, "joined_at": member["joined_at"]})
     sent = await db.family_invites.find({"family_id": membership["family_id"], "status": "pending"}, {"_id": 0}).to_list(20)
-    return {"family": family, "members": member_rows, "invites_sent": [{"id": item["id"], "email": item["email"], "status": item["status"]} for item in sent], "invites_received": received, "is_admin": membership["role"] == "admin"}
+    return {"family": family, "members": member_rows, "invites_sent": [{"id": item["id"], "email": item["email"], "status": item["status"]} for item in sent], "invites_received": received, "is_admin": membership["role"] == "admin", "nudges": nudges}
 
 
 @api_router.post("/family")
@@ -772,6 +786,23 @@ async def remove_family_member(member_user_id: str, user: Dict[str, Any] = Depen
     if not result.deleted_count:
         raise HTTPException(status_code=404, detail="Member not found")
     return {"message": "Member removed"}
+
+
+@api_router.post("/family/nudge")
+async def send_family_nudge(payload: Dict[str, Any], user: Dict[str, Any] = Depends(current_user)) -> Dict[str, str]:
+    target = str(payload.get("member_user_id", ""))
+    membership = await db.family_members.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not membership:
+        raise HTTPException(status_code=400, detail="You are not in a family circle")
+    target_member = await db.family_members.find_one({"family_id": membership["family_id"], "user_id": target}, {"_id": 0})
+    if not target_member or target == user["id"]:
+        raise HTTPException(status_code=404, detail="Member not found")
+    today = date.today().isoformat()
+    existing = await db.family_nudges.find_one({"family_id": membership["family_id"], "from_user_id": user["id"], "to_user_id": target, "date": today}, {"_id": 0, "id": 1})
+    if existing:
+        raise HTTPException(status_code=409, detail="You already nudged them today")
+    await db.family_nudges.insert_one({"id": str(uuid.uuid4()), "family_id": membership["family_id"], "from_user_id": user["id"], "from_name": user["full_name"], "to_user_id": target, "date": today, "created_at": now_iso()})
+    return {"message": "Nudge sent — a gentle reminder goes a long way"}
 
 
 @api_router.get("/consents")
