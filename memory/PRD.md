@@ -27,7 +27,14 @@ Pulse is a mobile health-awareness application that helps people build a persona
 6. Database-backed doctors, pending appointment requests, community membership, and consent controls.
 7. Explicit loading, empty, retry/error, and non-diagnostic messaging.
 
-## Implemented 2026-10-09
+## Implemented 2026-10-09 (remediation pass, verified)
+
+- Acceptance remediation closed: every interactive element and key screen now exposes stable kebab-case `testID` selectors (auth fields/modes/OTP, home/assessment controls, Pulse 60 choices/save, care booking, consents, community join, tab nav, logout).
+- Fixed the React Native web "Unexpected text node" warning; fresh-bundle logs are clean through the full register → OTP → home → all-tabs flow.
+- `src/api.ts` now consumes the canonical `EXPO_PUBLIC_BACKEND_URL` contract (no dead variable, no hardcoded URLs).
+- Appointment booking failures now surface a visible `care-booking-error` message instead of silently resetting; backend 404/409 error shapes verified.
+- Backend verified end-to-end (25 checks): register, wrong-OTP rejection, OTP verify, login, 401 without token, assessment scoring (85) with attention flags, Pulse 60 same-day upsert, timeline, invalid-doctor 404, unknown-cancel 404, consent grant/revoke, cross-user isolation on assessments/appointments, logout invalidation (post-logout 401).
+- `tests/test_smoke.py` hardened to load `EXPO_PUBLIC_BACKEND_URL` from `frontend/.env`; 3/3 passing. JS lint clean.
 
 - Replaced the starter API with authenticated registration, OTP verification, login, logout, recovery, profile, account deletion, and private authorization endpoints.
 - Added assessment questions/scoring version, independent awareness flags, score history, Pulse 60 persistence/streak calculation, timeline, uploads, doctor/appointment, community, and consent APIs.

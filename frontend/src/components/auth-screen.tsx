@@ -52,7 +52,7 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: (result: Auth
   const field = (label: string, key: keyof typeof form, placeholder: string, keyboardType?: "default" | "email-address" | "number-pad" | "phone-pad", secureTextEntry = false) => (
     <View style={styles.field} key={key}>
       <Text style={styles.label}>{label}</Text>
-      <TextInput value={form[key]} onChangeText={(value) => update(key, value)} placeholder={placeholder} placeholderTextColor={colors.muted} style={styles.input} keyboardType={keyboardType} secureTextEntry={secureTextEntry} autoCapitalize={key === "email" ? "none" : "sentences"} />
+      <TextInput testID={`auth-input-${key}`} value={form[key]} onChangeText={(value) => update(key, value)} placeholder={placeholder} placeholderTextColor={colors.muted} style={styles.input} keyboardType={keyboardType} secureTextEntry={secureTextEntry} autoCapitalize={key === "email" ? "none" : "sentences"} />
     </View>
   );
 
@@ -64,22 +64,22 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: (result: Auth
         <Text style={styles.subtitle}>{step === "otp" ? "Enter the six-digit development code sent to your email." : "Build your personal health profile and stay aware of what matters most."}</Text>
         {step === "otp" ? (
           <View style={styles.formBlock}>
-            {devOtp ? <Text style={styles.devCode}>Development verification code: {devOtp}</Text> : null}
+            {devOtp ? <Text testID="auth-dev-otp" style={styles.devCode}>Development verification code: {devOtp}</Text> : null}
             <Text style={styles.label}>Verification code</Text>
-            <TextInput value={otp} onChangeText={setOtp} placeholder="6 digits" placeholderTextColor={colors.muted} style={styles.input} keyboardType="number-pad" maxLength={6} />
-            <ActionButton title="Verify and enter Pulse" onPress={verify} busy={busy} />
+            <TextInput testID="auth-input-otp" value={otp} onChangeText={setOtp} placeholder="6 digits" placeholderTextColor={colors.muted} style={styles.input} keyboardType="number-pad" maxLength={6} />
+            <ActionButton testID="auth-verify" title="Verify and enter Pulse" onPress={verify} busy={busy} />
             <Pressable onPress={() => setStep("form")} style={styles.textButton}><Text style={styles.textButtonLabel}>Back to registration</Text></Pressable>
           </View>
         ) : (
           <View style={styles.formBlock}>
             <View style={styles.modeSwitch}>
-              {(["register", "login"] as const).map((item) => <Pressable key={item} onPress={() => { setMode(item); setError(""); }} style={[styles.modeButton, mode === item && styles.modeButtonActive]}><Text style={[styles.modeText, mode === item && styles.modeTextActive]}>{item === "register" ? "Create account" : "Log in"}</Text></Pressable>)}
+              {(["register", "login"] as const).map((item) => <Pressable testID={`auth-mode-${item}`} key={item} onPress={() => { setMode(item); setError(""); }} style={[styles.modeButton, mode === item && styles.modeButtonActive]}><Text style={[styles.modeText, mode === item && styles.modeTextActive]}>{item === "register" ? "Create account" : "Log in"}</Text></Pressable>)}
             </View>
-            {mode === "register" ? <>{field("Full name", "full_name", "Your name")}{field("Age", "age", "Your age", "number-pad")}<Text style={styles.label}>Gender</Text><View style={styles.optionRow}>{["Female", "Male", "Non-binary", "Prefer not to say"].map((item) => <Pressable key={item} onPress={() => update("gender", item)} style={[styles.option, form.gender === item && styles.optionActive]}><Text style={[styles.optionText, form.gender === item && styles.optionTextActive]}>{item}</Text></Pressable>)}</View>{field("State", "state", "Your state")}{field("City", "city", "Your city")}{field("Phone number", "phone", "Your phone number", "phone-pad")}</> : null}
+            {mode === "register" ? <>{field("Full name", "full_name", "Your name")}{field("Age", "age", "Your age", "number-pad")}<Text style={styles.label}>Gender</Text><View style={styles.optionRow}>{["Female", "Male", "Non-binary", "Prefer not to say"].map((item) => <Pressable testID={`auth-gender-${item.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`} key={item} onPress={() => update("gender", item)} style={[styles.option, form.gender === item && styles.optionActive]}><Text style={[styles.optionText, form.gender === item && styles.optionTextActive]}>{item}</Text></Pressable>)}</View>{field("State", "state", "Your state")}{field("City", "city", "Your city")}{field("Phone number", "phone", "Your phone number", "phone-pad")}</> : null}
             {field("Email address", "email", "you@example.com", "email-address")}
             {field("Password", "password", "At least 8 characters", "default", true)}
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-            <ActionButton title={mode === "register" ? "Register" : "Log in"} onPress={submit} busy={busy} />
+            {error ? <Text testID="auth-error" style={styles.error}>{error}</Text> : null}
+            <ActionButton testID="auth-submit" title={mode === "register" ? "Register" : "Log in"} onPress={submit} busy={busy} />
             <Text style={styles.privacy}>Your health information is private and protected.</Text>
             <Text style={styles.disclaimer}>Pulse supports health awareness and conversation. It does not diagnose or prescribe treatment.</Text>
           </View>
@@ -89,8 +89,8 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: (result: Auth
   );
 }
 
-function ActionButton({ title, onPress, busy }: { title: string; onPress: () => void; busy: boolean }) {
-  return <Pressable accessibilityRole="button" disabled={busy} onPress={onPress} style={({ pressed }) => [styles.action, pressed && styles.pressed, busy && styles.disabled]}>{busy ? <ActivityIndicator color={colors.onBrandPrimary} /> : <Text style={styles.actionLabel}>{title}</Text>}</Pressable>;
+function ActionButton({ testID, title, onPress, busy }: { testID: string; title: string; onPress: () => void; busy: boolean }) {
+  return <Pressable testID={testID} accessibilityRole="button" disabled={busy} onPress={onPress} style={({ pressed }) => [styles.action, pressed && styles.pressed, busy && styles.disabled]}>{busy ? <ActivityIndicator color={colors.onBrandPrimary} /> : <Text style={styles.actionLabel}>{title}</Text>}</Pressable>;
 }
 
 const styles = StyleSheet.create({
