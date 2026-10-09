@@ -3,7 +3,6 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, Vie
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api, Consent, User } from "@/src/api";
-import { CommunitySection } from "@/src/components/community-section";
 import { ReportsSection } from "@/src/components/reports-section";
 import { colors } from "@/src/theme";
 
@@ -54,7 +53,6 @@ export function MoreScreen({ user, onLogout }: { user: User; onLogout: () => Pro
           <SettingRow testID="consent-doctor" title="Share with a doctor" detail="Allow a professional to review selected health context." value={consentValue("doctor")} onChange={(value) => toggleConsent("doctor", value)} />
         </>
       )}
-      <CommunitySection />
       {busy ? <ActivityIndicator color={colors.brandPrimary} style={styles.loader} /> : null}
       <ReportsSection />
       <Pressable testID="logout-button" onPress={async () => { setBusy(true); await onLogout(); }} style={styles.logout}>

@@ -2,20 +2,37 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { api, Assessment, AssessmentQuestion, PulseSummary, TimelineEvent, User } from "@/src/api";
+import { api, Assessment, AssessmentQuestion, PulseSummary, Subscription, TimelineEvent, User } from "@/src/api";
 import { ScoreTrend } from "@/src/components/score-trend";
 import { colors } from "@/src/theme";
 
-export function HomeScreen({ user, onNavigate }: { user: User; onNavigate: (tab: "home" | "pulse" | "care" | "more") => void }) {
+export function HomeScreen({ user, onNavigate }: { user: User; onNavigate: (tab: "home" | "pulse" | "care" | "community" | "more") => void }) {
   const insets = useSafeAreaInsets();
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [history, setHistory] = useState<Assessment[]>([]);
   const [pulse, setPulse] = useState<PulseSummary | null>(null);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [showPlans, setShowPlans] = useState(false);
+  const [planMessage, setPlanMessage] = useState("");
+  const [planBusy, setPlanBusy] = useState(false);
   const [showAssessment, setShowAssessment] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  useEffect(() => { Promise.all([api.latestAssessment(), api.assessmentHistory(), api.pulse(), api.timeline()]).then(([assessmentResult, historyResult, pulseResult, timelineResult]) => { setAssessment(assessmentResult.assessment); setHistory(historyResult.assessments); setPulse(pulseResult); setTimeline(timelineResult.events.slice(0, 3)); }).catch((requestError) => setError(requestError instanceof Error ? requestError.message : "Unable to load your health metrics.")).finally(() => setLoading(false)); }, []);
+  useEffect(() => { Promise.all([api.latestAssessment(), api.assessmentHistory(), api.pulse(), api.timeline(), api.subscription()]).then(([assessmentResult, historyResult, pulseResult, timelineResult, subscriptionResult]) => { setAssessment(assessmentResult.assessment); setHistory(historyResult.assessments); setPulse(pulseResult); setTimeline(timelineResult.events.slice(0, 3)); setSubscription(subscriptionResult); }).catch((requestError) => setError(requestError instanceof Error ? requestError.message : "Unable to load your health metrics.")).finally(() => setLoading(false)); }, []);
+  const choosePlan = async (planId: string) => {
+    setPlanBusy(true);
+    setPlanMessage("");
+    try {
+      const result = await api.choosePlan({ plan: planId });
+      setSubscription(await api.subscription());
+      setPlanMessage(result.message);
+    } catch (requestError) {
+      setPlanMessage(requestError instanceof Error ? requestError.message : "We could not save your choice.");
+    } finally {
+      setPlanBusy(false);
+    }
+  };
   if (showAssessment) return <AssessmentPanel onDone={(nextAssessment) => { setAssessment(nextAssessment); setHistory((current) => [nextAssessment, ...current]); setShowAssessment(false); }} onBack={() => setShowAssessment(false)} />;
   return (
     <ScrollView testID="home-screen" style={styles.root} contentContainerStyle={[styles.content, { paddingTop: insets.top + 24 }]}>
@@ -56,6 +73,34 @@ export function HomeScreen({ user, onNavigate }: { user: User; onNavigate: (tab:
               ))}
             </View>
           ) : null}
+          {subscription ? (
+            <View style={styles.trialCard} testID="home-trial-card">
+              <Text style={styles.trialEyebrow}>{subscription.plan === "trial" ? `FREE TRIAL · ${subscription.trial_days_left} OF 14 DAYS LEFT` : subscription.plan === "premium" ? "PREMIUM" : subscription.plan === "basic" ? "BASIC PLAN" : "TRIAL ENDED"}</Text>
+              <Text style={styles.trialTitle}>{subscription.plan === "trial" ? "Premium is free for your first 14 days." : subscription.plan === "premium" ? "Premium requested — payments open soon." : subscription.plan === "basic" ? "You are on the Basic plan." : "Choose a plan to keep Premium features."}</Text>
+              {planMessage ? <Text testID="home-plan-message" style={styles.trendNote}>{planMessage}</Text> : null}
+              {showPlans ? (
+                <View style={styles.plans}>
+                  {subscription.plans.map((plan) => (
+                    <View key={plan.id} style={styles.planCard} testID={`home-plan-card-${plan.id}`}>
+                      <View style={styles.planHead}>
+                        <Text style={styles.planName}>{plan.name}</Text>
+                        <Text style={styles.planPrice}>{plan.price_inr === 0 ? "Free" : `₹${plan.price_inr} ${plan.period}`}</Text>
+                      </View>
+                      {plan.features.map((feature) => <Text key={feature} style={styles.planFeature}>· {feature}</Text>)}
+                      <Pressable testID={`home-plan-${plan.id}`} disabled={planBusy} onPress={() => choosePlan(plan.id)} style={[styles.planButton, plan.id === "premium" && styles.planButtonPremium, planBusy && styles.disabled]}>
+                        <Text style={[styles.planButtonText, plan.id === "premium" && styles.planButtonTextPremium]}>{plan.id === "premium" ? "Choose Premium · ₹499" : "Stay on Basic"}</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                  <Text style={styles.planNote}>Payments open soon. Your choice is saved and Premium features stay unlocked during the trial.</Text>
+                </View>
+              ) : (
+                <Pressable testID="home-see-plans" onPress={() => setShowPlans(true)} style={styles.planToggle}>
+                  <Text style={styles.planToggleText}>See Basic & Premium plans</Text>
+                </Pressable>
+              )}
+            </View>
+          ) : null}
           <View style={styles.actions}>
             <Pressable testID="home-assessment-button" onPress={() => setShowAssessment(true)} style={({ pressed }) => [styles.primaryAction, pressed && styles.pressed]}>
               <Text style={styles.primaryActionText}>{assessment ? "Retake assessment" : "Start assessment"}</Text>
@@ -64,6 +109,13 @@ export function HomeScreen({ user, onNavigate }: { user: User; onNavigate: (tab:
               <Text style={styles.secondaryActionText}>Do today’s Pulse 60</Text>
             </Pressable>
           </View>
+          <Pressable testID="home-care-card" onPress={() => onNavigate("care")} style={({ pressed }) => [styles.careCard, pressed && styles.pressed]}>
+            <View style={styles.careCopy}>
+              <Text style={styles.careTitle}>Talk to a professional</Text>
+              <Text style={styles.careText}>Browse the verified care directory and request an appointment.</Text>
+            </View>
+            <Text style={styles.careArrow}>›</Text>
+          </Pressable>
           <View style={styles.section}>
             <View style={styles.rowBetween}>
               <Text style={styles.sectionTitle}>Your week</Text>
@@ -133,5 +185,5 @@ function AssessmentPanel({ onDone, onBack }: { onDone: (assessment: Assessment) 
   );
 }
 
-const styles = StyleSheet.create({ root: { flex: 1, backgroundColor: colors.surface }, content: { paddingHorizontal: 22, paddingBottom: 30 }, eyebrow: { color: colors.brandPrimary, fontSize: 12, fontWeight: "800", letterSpacing: 1.2 }, greeting: { color: colors.onSurface, fontSize: 30, fontWeight: "700", marginTop: 10 }, subtitle: { color: colors.muted, fontSize: 15, lineHeight: 22, marginTop: 8 }, scoreCard: { marginTop: 26, padding: 22, backgroundColor: colors.brandPrimary, borderRadius: 20, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, cardEyebrow: { color: colors.brandTertiary, fontSize: 11, fontWeight: "800", letterSpacing: 1 }, score: { color: colors.onBrandPrimary, fontSize: 54, fontWeight: "800", marginTop: 4 }, scoreOutOf: { fontSize: 17, fontWeight: "500" }, cardNote: { color: colors.brandTertiary, fontSize: 13, marginTop: 4 }, scoreRing: { width: 72, height: 72, borderRadius: 36, borderWidth: 2, borderColor: colors.brandTertiary, alignItems: "center", justifyContent: "center" }, ringText: { color: colors.onBrandPrimary, fontSize: 10, fontWeight: "800", letterSpacing: 1 }, section: { marginTop: 30 }, sectionTitle: { color: colors.onSurface, fontSize: 19, fontWeight: "700" }, flag: { flexDirection: "row", gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.divider }, flagDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.warning, marginTop: 5 }, flagCopy: { flex: 1 }, flagTitle: { color: colors.onSurface, fontWeight: "700" }, flagReason: { color: colors.muted, marginTop: 4, lineHeight: 19 }, actions: { gap: 10, marginTop: 26 }, primaryAction: { minHeight: 52, borderRadius: 26, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 }, primaryActionText: { color: colors.onBrandPrimary, fontSize: 15, fontWeight: "700" }, secondaryAction: { minHeight: 52, borderRadius: 26, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 }, secondaryActionText: { color: colors.onBrandTertiary, fontSize: 15, fontWeight: "700" }, pressed: { opacity: 0.76 }, disabled: { opacity: 0.6 }, rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, link: { color: colors.brandPrimary, fontWeight: "700" }, weekRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 18 }, day: { alignItems: "center", gap: 7 }, dayDot: { width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: colors.borderStrong, alignItems: "center", justifyContent: "center" }, dayDotComplete: { backgroundColor: colors.success, borderColor: colors.success }, dayCheck: { color: colors.muted }, dayCheckComplete: { color: colors.onSuccess, fontWeight: "800" }, dayLabel: { color: colors.muted, fontSize: 12 }, streak: { color: colors.onSurfaceSecondary, fontSize: 13, marginTop: 15 }, timelineItem: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.divider }, timelineType: { color: colors.brandPrimary, fontSize: 10, fontWeight: "800", letterSpacing: 1 }, timelineTitle: { color: colors.onSurface, fontWeight: "700", marginTop: 5 }, timelineDetail: { color: colors.muted, marginTop: 3 }, empty: { color: colors.muted, lineHeight: 21, marginTop: 10 }, trendNote: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 6 }, center: { minHeight: 180, alignItems: "center", justifyContent: "center" }, error: { color: colors.error, lineHeight: 20, marginTop: 14 }, back: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start" }, assessmentTitle: { color: colors.onSurface, fontSize: 28, lineHeight: 35, fontWeight: "700", marginTop: 28 }, options: { gap: 10, marginTop: 28, marginBottom: 18 }, answer: { minHeight: 54, borderWidth: 1, borderColor: colors.border, borderRadius: 13, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.surfaceSecondary }, answerSelected: { borderColor: colors.brandPrimary, backgroundColor: colors.brandTertiary }, answerText: { color: colors.onSurfaceSecondary, fontSize: 15 }, answerTextSelected: { color: colors.onBrandTertiary, fontWeight: "700" }, answerCheck: { color: colors.brandPrimary, fontWeight: "800" },
+const styles = StyleSheet.create({ root: { flex: 1, backgroundColor: colors.surface }, content: { paddingHorizontal: 22, paddingBottom: 30 }, eyebrow: { color: colors.brandPrimary, fontSize: 12, fontWeight: "800", letterSpacing: 1.2 }, greeting: { color: colors.onSurface, fontSize: 30, fontWeight: "700", marginTop: 10 }, subtitle: { color: colors.muted, fontSize: 15, lineHeight: 22, marginTop: 8 }, scoreCard: { marginTop: 26, padding: 22, backgroundColor: colors.brandPrimary, borderRadius: 20, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, cardEyebrow: { color: colors.brandTertiary, fontSize: 11, fontWeight: "800", letterSpacing: 1 }, score: { color: colors.onBrandPrimary, fontSize: 54, fontWeight: "800", marginTop: 4 }, scoreOutOf: { fontSize: 17, fontWeight: "500" }, cardNote: { color: colors.brandTertiary, fontSize: 13, marginTop: 4 }, scoreRing: { width: 72, height: 72, borderRadius: 36, borderWidth: 2, borderColor: colors.brandTertiary, alignItems: "center", justifyContent: "center" }, ringText: { color: colors.onBrandPrimary, fontSize: 10, fontWeight: "800", letterSpacing: 1 }, section: { marginTop: 30 }, sectionTitle: { color: colors.onSurface, fontSize: 19, fontWeight: "700" }, flag: { flexDirection: "row", gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.divider }, flagDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.warning, marginTop: 5 }, flagCopy: { flex: 1 }, flagTitle: { color: colors.onSurface, fontWeight: "700" }, flagReason: { color: colors.muted, marginTop: 4, lineHeight: 19 }, actions: { gap: 10, marginTop: 26 }, primaryAction: { minHeight: 52, borderRadius: 26, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 }, primaryActionText: { color: colors.onBrandPrimary, fontSize: 15, fontWeight: "700" }, secondaryAction: { minHeight: 52, borderRadius: 26, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 }, secondaryActionText: { color: colors.onBrandTertiary, fontSize: 15, fontWeight: "700" }, pressed: { opacity: 0.76 }, disabled: { opacity: 0.6 }, rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, link: { color: colors.brandPrimary, fontWeight: "700" }, weekRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 18 }, day: { alignItems: "center", gap: 7 }, dayDot: { width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: colors.borderStrong, alignItems: "center", justifyContent: "center" }, dayDotComplete: { backgroundColor: colors.success, borderColor: colors.success }, dayCheck: { color: colors.muted }, dayCheckComplete: { color: colors.onSuccess, fontWeight: "800" }, dayLabel: { color: colors.muted, fontSize: 12 }, streak: { color: colors.onSurfaceSecondary, fontSize: 13, marginTop: 15 }, timelineItem: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.divider }, timelineType: { color: colors.brandPrimary, fontSize: 10, fontWeight: "800", letterSpacing: 1 }, timelineTitle: { color: colors.onSurface, fontWeight: "700", marginTop: 5 }, timelineDetail: { color: colors.muted, marginTop: 3 }, empty: { color: colors.muted, lineHeight: 21, marginTop: 10 }, trendNote: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 6 }, trialCard: { marginTop: 26, padding: 20, backgroundColor: colors.surfaceSecondary, borderRadius: 18, borderWidth: 1, borderColor: colors.border }, trialEyebrow: { color: colors.brandPrimary, fontSize: 11, fontWeight: "800", letterSpacing: 1 }, trialTitle: { color: colors.onSurface, fontSize: 17, fontWeight: "700", marginTop: 8, lineHeight: 23 }, plans: { marginTop: 14, gap: 12 }, planCard: { borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 16, backgroundColor: colors.surface }, planHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, planName: { color: colors.onSurface, fontSize: 16, fontWeight: "800" }, planPrice: { color: colors.brandPrimary, fontSize: 15, fontWeight: "800" }, planFeature: { color: colors.muted, fontSize: 13, lineHeight: 20, marginTop: 4 }, planButton: { minHeight: 44, borderRadius: 22, borderWidth: 1, borderColor: colors.brandPrimary, alignItems: "center", justifyContent: "center", marginTop: 12 }, planButtonPremium: { backgroundColor: colors.brandPrimary }, planButtonText: { color: colors.brandPrimary, fontWeight: "700" }, planButtonTextPremium: { color: colors.onBrandPrimary }, planNote: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 4 }, planToggle: { minHeight: 44, borderRadius: 22, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center", marginTop: 14 }, planToggleText: { color: colors.onBrandPrimary, fontWeight: "700" }, careCard: { marginTop: 14, padding: 18, backgroundColor: colors.surfaceSecondary, borderRadius: 18, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 12 }, careCopy: { flex: 1 }, careTitle: { color: colors.onSurface, fontSize: 16, fontWeight: "700" }, careText: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 4 }, careArrow: { color: colors.brandPrimary, fontSize: 28, fontWeight: "700" }, center: { minHeight: 180, alignItems: "center", justifyContent: "center" }, error: { color: colors.error, lineHeight: 20, marginTop: 14 }, back: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start" }, assessmentTitle: { color: colors.onSurface, fontSize: 28, lineHeight: 35, fontWeight: "700", marginTop: 28 }, options: { gap: 10, marginTop: 28, marginBottom: 18 }, answer: { minHeight: 54, borderWidth: 1, borderColor: colors.border, borderRadius: 13, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.surfaceSecondary }, answerSelected: { borderColor: colors.brandPrimary, backgroundColor: colors.brandTertiary }, answerText: { color: colors.onSurfaceSecondary, fontSize: 15 }, answerTextSelected: { color: colors.onBrandTertiary, fontWeight: "700" }, answerCheck: { color: colors.brandPrimary, fontWeight: "800" },
 });

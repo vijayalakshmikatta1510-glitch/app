@@ -27,6 +27,15 @@ Pulse is a mobile health-awareness application that helps people build a persona
 6. Database-backed doctors, pending appointment requests, community membership, and consent controls.
 7. Explicit loading, empty, retry/error, and non-diagnostic messaging.
 
+## Implemented 2026-10-09 (feature pass 5, verified)
+
+- **Pulse Circles (main moat)**: Community is now a main tab matching the prototype — near-you banner ("N people near you completed today's Pulse" + streak), Near you / Following / Circles segments, circle cards with real member counts and group check-in goal bars, per-circle feeds, and "Share my journey" opt-in toggle with an auto-generated anonymous handle (e.g. MerryBadger47). Circle posts now show the anonymous handle, never the real name. 6 circles seeded (PCOS & hormones, Sleep reset, Desk-job stress, Walk 30 club + 2 earlier). Disclaimer: peer support, not medical advice; doctors/family never see Circle activity.
+- **Family circle**: create a private family group, invite members by email (invite surfaces when they open Pulse), accept/decline, and track each other's streaks, weekly check-ins, and latest Pulse Score — with explicit share-consent copy. Admin can remove members; admin closing rules enforced. Verified: 12 backend checks including non-admin remove 403 and one-circle-per-user.
+- **Pulse 60 evidence + rewards**: optional food/steps evidence photos (contextual permission flow, private uploads linked to the check-in date, thumbnails in-screen), a 60-day streak benefits card with progress bar, unlock + claim flow (claim blocked before 60 days — 400 verified), and one-tap "share today's win" to joined circles.
+- **Trial & plans**: Home shows a 14-day free-trial card with days left, expandable Basic (Free) / Premium (₹499/month) plan cards with feature lists; choice is stored server-side with payment marked pending (provider wiring later; no feature gating yet).
+- **Navigation**: tabs are now Home, Pulse 60, Community, More; Care directory is reachable from a Home card.
+- Verified: 24 backend checks (subscription/trial math, benefits, near-you, sharing, anonymous posting, following scope, family lifecycle), full UI pass across all tabs, lint clean, smoke 3/3.
+
 ## Implemented 2026-10-09 (feature pass 4, verified)
 
 - **Post moderation**: every community post now has Report and Block author controls. `POST /community/posts/{id}/report` upserts a pending-review record per reporter (idempotent, 404 on unknown post); `POST /community/posts/{id}/block` resolves the author server-side (IDs never exposed), stores a `user_blocks` entry, and the posts feed excludes blocked authors per requester. Verified: report idempotency, block hides author for blocker only, self-block rejected (400), author's own view unaffected.

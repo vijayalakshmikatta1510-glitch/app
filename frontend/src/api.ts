@@ -44,6 +44,8 @@ export type User = {
   phone: string;
   email?: string | null;
   email_verified: boolean;
+  circle_handle?: string | null;
+  circle_share?: boolean;
   created_at: string;
 };
 
@@ -84,7 +86,22 @@ export const api = {
   createPost: (body: { group_id: string; body: string }) => request<CommunityPost>("/community/posts", { method: "POST", body: JSON.stringify(body) }),
   reportPost: (id: string, reason = "member_flag") => request<{ message: string }>(`/community/posts/${id}/report`, { method: "POST", body: JSON.stringify({ reason }) }),
   blockPostAuthor: (id: string) => request<{ message: string }>(`/community/posts/${id}/block`, { method: "POST", body: JSON.stringify({}) }),
+  groupStats: (id: string) => request<GroupStats>(`/community/groups/${id}/stats`),
   assessmentHistory: () => request<{ assessments: Assessment[] }>("/assessment/history"),
+  benefits: () => request<Benefits>("/pulse60/benefits"),
+  claimBenefits: () => request<{ message: string; claimed: boolean }>("/pulse60/benefits/claim", { method: "POST", body: JSON.stringify({}) }),
+  subscription: () => request<Subscription>("/subscription"),
+  choosePlan: (body: { plan: string }) => request<{ message: string }>("/subscription/choose", { method: "POST", body: JSON.stringify(body) }),
+  nearYou: () => request<NearYou>("/community/near-you"),
+  updateSharing: (share: boolean) => request<{ share: boolean; handle: string; message: string }>("/community/sharing", { method: "PUT", body: JSON.stringify({ share }) }),
+  followingPosts: () => request<{ posts: CommunityPost[] }>("/community/posts?scope=following"),
+  family: () => request<FamilyData>("/family"),
+  createFamily: (body: { name: string }) => request<{ message: string }>("/family", { method: "POST", body: JSON.stringify(body) }),
+  inviteFamily: (body: { email: string }) => request<{ message: string }>("/family/invite", { method: "POST", body: JSON.stringify(body) }),
+  acceptFamilyInvite: (id: string) => request<{ message: string }>(`/family/invites/${id}/accept`, { method: "POST", body: JSON.stringify({}) }),
+  declineFamilyInvite: (id: string) => request<{ message: string }>(`/family/invites/${id}/decline`, { method: "POST", body: JSON.stringify({}) }),
+  leaveFamily: () => request<{ message: string }>("/family/leave", { method: "POST", body: JSON.stringify({}) }),
+  removeFamilyMember: (userId: string) => request<{ message: string }>(`/family/members/${userId}`, { method: "DELETE" }),
   consents: () => request<{ consents: Consent[] }>("/consents"),
   updateConsent: (body: Record<string, unknown>) => request<Consent>("/consents", { method: "PUT", body: JSON.stringify(body) }),
 };
@@ -95,7 +112,15 @@ export type PulseSummary = { streak: number; days: { date: string; complete: boo
 export type TimelineEvent = { id: string; type: string; title: string; detail: string; created_at: string };
 export type Doctor = { id: string; name: string; designation: string; speciality: string; city: string; languages: string[]; verification_status: string; availability_status: string };
 export type Appointment = { id: string; doctor_name: string; requested_date: string; consultation_mode: string; status: string };
-export type CommunityGroup = { id: string; name: string; topic: string; city?: string; joined: boolean };
+export type CommunityGroup = { id: string; name: string; topic: string; city?: string; joined: boolean; member_count?: number };
 export type Consent = { consent_type: string; granted: boolean; updated_at: string };
 export type CommunityPost = { id: string; group_id: string; author_name: string; body: string; created_at: string };
+export type GroupStats = { members: number; checkins_this_week: number; weekly_goal: number; posts: number };
+export type Benefits = { streak: number; target: number; unlocked: boolean; claimed: boolean; benefits: string[]; fulfilment: string };
+export type SubscriptionPlan = { id: string; name: string; price_inr: number; period: string; features: string[] };
+export type Subscription = { plan: string; trial_active: boolean; trial_ends_at: string; trial_days_left: number; payment_status: string | null; plans: SubscriptionPlan[] };
+export type NearYou = { completed_today: number; streak: number; city: string };
+export type FamilyMember = { user_id: string; name: string; role: string; streak: number; checkins_this_week: number; latest_score: number | null; joined_at: string };
+export type FamilyInvite = { id: string; email?: string; status?: string; family_name?: string; from_name?: string };
+export type FamilyData = { family: { id: string; name: string; created_by: string } | null; members: FamilyMember[]; invites_sent: FamilyInvite[]; invites_received: FamilyInvite[]; is_admin: boolean };
 export type UploadRecord = { id: string; purpose: string; confirmed_date?: string | null; original_name: string; content_type: string; size: number; validation_status: string; created_at: string };

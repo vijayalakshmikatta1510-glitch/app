@@ -20,6 +20,10 @@ load_dotenv(ROOT_DIR / ".env")
 SAMPLE_GROUPS = [
     {"id": "grp-morning-walkers", "name": "Morning Walkers", "topic": "Daily walking habits and gentle motivation", "city": "Bengaluru"},
     {"id": "grp-heart-healthy-plate", "name": "The Heart-Healthy Plate", "topic": "Recipes and meal ideas for heart-conscious eating", "city": None},
+    {"id": "grp-pcos-hormones", "name": "PCOS & hormones", "topic": "Living with PCOS and hormonal health", "city": "Bengaluru"},
+    {"id": "grp-sleep-reset", "name": "Sleep reset", "topic": "Building a calmer night routine", "city": "Bengaluru"},
+    {"id": "grp-desk-job-stress", "name": "Desk-job stress", "topic": "Unwinding from screen-heavy workdays", "city": "Bengaluru"},
+    {"id": "grp-walk-30-club", "name": "Walk 30 club", "topic": "Thirty minutes of walking, most days", "city": "Bengaluru"},
 ]
 
 SAMPLE_POSTS = [

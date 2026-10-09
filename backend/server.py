@@ -54,6 +54,8 @@ def public_user(user: Dict[str, Any]) -> Dict[str, Any]:
         "email": user.get("email"),
         "email_verified": user.get("email_verified", False),
         "phone_verified": user.get("phone_verified", False),
+        "circle_handle": user.get("circle_handle"),
+        "circle_share": user.get("circle_share", False),
         "created_at": user["created_at"],
     }
 
@@ -173,6 +175,22 @@ def calculate_assessment(answers: Dict[str, Any]) -> tuple[int, Dict[str, int], 
     return total, question_scores, list(unique_flags.values())
 
 
+HANDLE_ADJECTIVES = ["Habit", "Steady", "Calm", "Bright", "Kind", "Swift", "Quiet", "Bold", "Gentle", "Merry", "Lucky", "Sunny"]
+HANDLE_ANIMALS = ["Heron", "Otter", "Falcon", "Deer", "Sparrow", "Tiger", "Dolphin", "Panda", "Koala", "Fox", "Robin", "Badger"]
+
+
+def generate_handle() -> str:
+    return f"{secrets.choice(HANDLE_ADJECTIVES)}{secrets.choice(HANDLE_ANIMALS)}{secrets.randbelow(90) + 10}"
+
+
+async def circle_handle_for(user: Dict[str, Any]) -> str:
+    handle = user.get("circle_handle")
+    if not handle:
+        handle = generate_handle()
+        await db.users.update_one({"id": user["id"]}, {"$set": {"circle_handle": handle}})
+    return handle
+
+
 async def current_user(authorization: Optional[str] = Header(default=None)) -> Dict[str, Any]:
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="Authentication required")
@@ -229,6 +247,8 @@ async def register(payload: RegisterRequest) -> Dict[str, Any]:
         "phone": payload.phone,
         "email": email,
         "password_hash": bcrypt.hashpw(payload.password.encode(), bcrypt.gensalt()).decode(),
+        "circle_handle": generate_handle(),
+        "circle_share": False,
         "email_verified": False,
         "phone_verified": False,
         "otp_hash": hash_value(otp),
@@ -380,6 +400,60 @@ async def save_pulse60(payload: CheckInRequest, user: Dict[str, Any] = Depends(c
     return {"check_in": record, "summary": await pulse_summary(user["id"])}
 
 
+BENEFIT_TARGET_DAYS = 60
+PULSE60_BENEFITS = ["1 free video consultation from the care directory", "Priority confirmation on one appointment request", "A printed annual health summary"]
+SUBSCRIPTION_PLANS = [
+    {"id": "basic", "name": "Basic", "price_inr": 0, "period": "free", "features": ["Daily Pulse 60 check-ins and streaks", "Awareness assessment and score trend", "Community groups and family circle"]},
+    {"id": "premium", "name": "Premium", "price_inr": 499, "period": "per month", "features": ["Everything in Basic", "Unlimited private report storage", "Priority appointment confirmation", "60-day streak medical benefits"]},
+]
+
+
+@api_router.get("/pulse60/benefits")
+async def pulse60_benefits(user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
+    summary = await pulse_summary(user["id"])
+    claim = await db.benefit_claims.find_one({"user_id": user["id"], "benefit": "pulse60_streak"}, {"_id": 0, "id": 1})
+    return {"streak": summary["streak"], "target": BENEFIT_TARGET_DAYS, "unlocked": summary["streak"] >= BENEFIT_TARGET_DAYS, "claimed": bool(claim), "benefits": PULSE60_BENEFITS, "fulfilment": "manual"}
+
+
+@api_router.post("/pulse60/benefits/claim")
+async def claim_pulse60_benefits(user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
+    summary = await pulse_summary(user["id"])
+    if summary["streak"] < BENEFIT_TARGET_DAYS:
+        raise HTTPException(status_code=400, detail="Complete a 60-day streak to unlock these benefits")
+    await db.benefit_claims.update_one(
+        {"user_id": user["id"], "benefit": "pulse60_streak"},
+        {"$set": {"user_id": user["id"], "benefit": "pulse60_streak", "claimed_at": now_iso()}, "$setOnInsert": {"id": str(uuid.uuid4())}},
+        upsert=True,
+    )
+    return {"message": "Benefits claimed. Our care team will reach out to arrange them.", "claimed": True}
+
+
+@api_router.get("/subscription")
+async def get_subscription(user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
+    record = await db.subscriptions.find_one({"user_id": user["id"]}, {"_id": 0})
+    created = datetime.fromisoformat(user["created_at"])
+    trial_ends = created + timedelta(days=14)
+    now = datetime.now(timezone.utc)
+    trial_active = now < trial_ends
+    plan = record["plan"] if record else ("trial" if trial_active else "expired")
+    return {"plan": plan, "trial_active": trial_active, "trial_ends_at": trial_ends.isoformat(), "trial_days_left": max(0, (trial_ends - now).days), "payment_status": record.get("payment_status") if record else None, "plans": SUBSCRIPTION_PLANS}
+
+
+@api_router.post("/subscription/choose")
+async def choose_subscription(payload: Dict[str, Any], user: Dict[str, Any] = Depends(current_user)) -> Dict[str, str]:
+    plan = str(payload.get("plan", ""))
+    if plan not in {"basic", "premium"}:
+        raise HTTPException(status_code=400, detail="Unknown plan")
+    payment_status = "pending" if plan == "premium" else "not_required"
+    await db.subscriptions.update_one(
+        {"user_id": user["id"]},
+        {"$set": {"user_id": user["id"], "plan": plan, "payment_status": payment_status, "updated_at": now_iso()}, "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now_iso()}},
+        upsert=True,
+    )
+    message = "Premium selected. Payments open soon — your choice is saved and Premium features stay unlocked meanwhile." if plan == "premium" else "Basic plan selected. You can upgrade anytime."
+    return {"message": message}
+
+
 @api_router.post("/uploads")
 async def upload_private_file(file: UploadFile = File(...), purpose: str = Form("health_report"), confirmed_date: Optional[str] = Form(default=None), user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
     allowed = {"image/jpeg": ".jpg", "image/png": ".png", "application/pdf": ".pdf"}
@@ -483,7 +557,21 @@ async def community_groups(user: Dict[str, Any] = Depends(current_user)) -> Dict
     groups = await db.community_groups.find({}, {"_id": 0}).to_list(100)
     memberships = await db.memberships.find({"user_id": user["id"]}, {"_id": 0, "group_id": 1}).to_list(100)
     member_ids = {item["group_id"] for item in memberships}
-    return {"groups": [{**group, "joined": group["id"] in member_ids} for group in groups]}
+    counts = await db.memberships.aggregate([{"$group": {"_id": "$group_id", "count": {"$sum": 1}}}]).to_list(100)
+    count_map = {item["_id"]: item["count"] for item in counts}
+    return {"groups": [{**group, "joined": group["id"] in member_ids, "member_count": count_map.get(group["id"], 0)} for group in groups]}
+
+
+@api_router.get("/community/groups/{group_id}/stats")
+async def group_stats(group_id: str, user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
+    group = await db.community_groups.find_one({"id": group_id}, {"_id": 0, "id": 1})
+    if not group:
+        raise HTTPException(status_code=404, detail="Community group not found")
+    member_ids = [item["user_id"] for item in await db.memberships.find({"group_id": group_id}, {"_id": 0, "user_id": 1}).to_list(500)]
+    week_start = (date.today() - timedelta(days=date.today().weekday())).isoformat()
+    checkins = await db.checkins.count_documents({"user_id": {"$in": member_ids}, "check_in_date": {"$gte": week_start}}) if member_ids else 0
+    posts = await db.community_posts.count_documents({"group_id": group_id})
+    return {"members": len(member_ids), "checkins_this_week": checkins, "weekly_goal": max(len(member_ids), 1) * 7, "posts": posts}
 
 
 @api_router.post("/community/groups/{group_id}/join")
@@ -502,8 +590,11 @@ async def leave_group(group_id: str, user: Dict[str, Any] = Depends(current_user
 
 
 @api_router.get("/community/posts")
-async def community_posts(group_id: Optional[str] = None, user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
+async def community_posts(group_id: Optional[str] = None, scope: Optional[str] = None, user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
     query: Dict[str, Any] = {"group_id": group_id} if group_id else {}
+    if scope == "following" and not group_id:
+        memberships = await db.memberships.find({"user_id": user["id"]}, {"_id": 0, "group_id": 1}).to_list(100)
+        query["group_id"] = {"$in": [item["group_id"] for item in memberships]}
     blocks = await db.user_blocks.find({"user_id": user["id"]}, {"_id": 0, "blocked_user_id": 1}).to_list(200)
     blocked_ids = [item["blocked_user_id"] for item in blocks]
     if blocked_ids:
@@ -517,7 +608,7 @@ async def create_community_post(payload: CommunityPostRequest, user: Dict[str, A
     membership = await db.memberships.find_one({"group_id": payload.group_id, "user_id": user["id"]}, {"_id": 0})
     if not membership:
         raise HTTPException(status_code=403, detail="Join the group before posting")
-    record = {"id": str(uuid.uuid4()), "group_id": payload.group_id, "author_user_id": user["id"], "author_name": user["full_name"], "body": payload.body.strip(), "created_at": now_iso()}
+    record = {"id": str(uuid.uuid4()), "group_id": payload.group_id, "author_user_id": user["id"], "author_name": await circle_handle_for(user), "body": payload.body.strip(), "created_at": now_iso()}
     await db.community_posts.insert_one(record)
     record.pop("_id", None)
     record.pop("author_user_id", None)
@@ -554,6 +645,135 @@ async def block_post_author(post_id: str, user: Dict[str, Any] = Depends(current
     return {"message": "You will no longer see posts from this member"}
 
 
+@api_router.put("/community/sharing")
+async def update_circle_sharing(payload: Dict[str, Any], user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
+    share = bool(payload.get("share"))
+    handle = await circle_handle_for(user)
+    await db.users.update_one({"id": user["id"]}, {"$set": {"circle_share": share, "updated_at": now_iso()}})
+    message = f"Sharing on. You appear as {handle}." if share else "Sharing off. Nobody sees your progress."
+    return {"share": share, "handle": handle, "message": message}
+
+
+@api_router.get("/community/near-you")
+async def community_near_you(user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
+    today = date.today().isoformat()
+    city_users = await db.users.find({"city": {"$regex": f"^{user['city']}$", "$options": "i"}}, {"_id": 0, "id": 1}).to_list(500)
+    city_ids = [item["id"] for item in city_users]
+    completed = await db.checkins.count_documents({"user_id": {"$in": city_ids}, "check_in_date": today}) if city_ids else 0
+    summary = await pulse_summary(user["id"])
+    return {"completed_today": completed, "streak": summary["streak"], "city": user["city"]}
+
+
+async def family_payload(user: Dict[str, Any]) -> Dict[str, Any]:
+    membership = await db.family_members.find_one({"user_id": user["id"]}, {"_id": 0})
+    pending_invites = await db.family_invites.find({"email": user.get("email"), "status": "pending"}, {"_id": 0}).to_list(20)
+    received = []
+    for invite in pending_invites:
+        family = await db.families.find_one({"id": invite["family_id"]}, {"_id": 0})
+        inviter = await db.users.find_one({"id": invite["invited_by"]}, {"_id": 0})
+        received.append({"id": invite["id"], "family_name": family["name"] if family else "Family circle", "from_name": inviter["full_name"] if inviter else "A Pulse member"})
+    if not membership:
+        return {"family": None, "members": [], "invites_sent": [], "invites_received": received, "is_admin": False}
+    family = await db.families.find_one({"id": membership["family_id"]}, {"_id": 0})
+    members = await db.family_members.find({"family_id": membership["family_id"]}, {"_id": 0}).to_list(50)
+    week_start = (date.today() - timedelta(days=date.today().weekday())).isoformat()
+    member_rows = []
+    for member in members:
+        member_user = await db.users.find_one({"id": member["user_id"]}, {"_id": 0})
+        summary = await pulse_summary(member["user_id"])
+        latest = await db.assessments.find_one({"user_id": member["user_id"]}, {"_id": 0, "total_score": 1}, sort=[("created_at", -1)])
+        week_checkins = await db.checkins.count_documents({"user_id": member["user_id"], "check_in_date": {"$gte": week_start}})
+        member_rows.append({"user_id": member["user_id"], "name": member_user["full_name"] if member_user else "Member", "role": member["role"], "streak": summary["streak"], "checkins_this_week": week_checkins, "latest_score": latest["total_score"] if latest else None, "joined_at": member["joined_at"]})
+    sent = await db.family_invites.find({"family_id": membership["family_id"], "status": "pending"}, {"_id": 0}).to_list(20)
+    return {"family": family, "members": member_rows, "invites_sent": [{"id": item["id"], "email": item["email"], "status": item["status"]} for item in sent], "invites_received": received, "is_admin": membership["role"] == "admin"}
+
+
+@api_router.post("/family")
+async def create_family(payload: Dict[str, Any], user: Dict[str, Any] = Depends(current_user)) -> Dict[str, str]:
+    name = str(payload.get("name", "")).strip()
+    if not name or len(name) > 60:
+        raise HTTPException(status_code=400, detail="Give your family circle a name (up to 60 characters)")
+    existing = await db.family_members.find_one({"user_id": user["id"]}, {"_id": 0, "family_id": 1})
+    if existing:
+        raise HTTPException(status_code=400, detail="You already belong to a family circle")
+    family_id = str(uuid.uuid4())
+    await db.families.insert_one({"id": family_id, "name": name, "created_by": user["id"], "created_at": now_iso()})
+    await db.family_members.insert_one({"family_id": family_id, "user_id": user["id"], "role": "admin", "joined_at": now_iso()})
+    return {"message": "Family circle created", "family_id": family_id}
+
+
+@api_router.get("/family")
+async def get_family(user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
+    return await family_payload(user)
+
+
+@api_router.post("/family/invite")
+async def invite_family(payload: Dict[str, Any], user: Dict[str, Any] = Depends(current_user)) -> Dict[str, str]:
+    membership = await db.family_members.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not membership:
+        raise HTTPException(status_code=400, detail="Create your family circle first")
+    email = str(payload.get("email", "")).strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Enter a valid email address")
+    if email == user.get("email"):
+        raise HTTPException(status_code=400, detail="You are already in this circle")
+    await db.family_invites.update_one(
+        {"family_id": membership["family_id"], "email": email, "status": "pending"},
+        {"$set": {"family_id": membership["family_id"], "email": email, "invited_by": user["id"], "status": "pending", "updated_at": now_iso()}, "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now_iso()}},
+        upsert=True,
+    )
+    return {"message": "Invite saved. They will see it when they open Pulse with that email."}
+
+
+@api_router.post("/family/invites/{invite_id}/accept")
+async def accept_family_invite(invite_id: str, user: Dict[str, Any] = Depends(current_user)) -> Dict[str, str]:
+    invite = await db.family_invites.find_one({"id": invite_id, "email": user.get("email"), "status": "pending"}, {"_id": 0})
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invite not found")
+    existing = await db.family_members.find_one({"user_id": user["id"]}, {"_id": 0, "family_id": 1})
+    if existing:
+        raise HTTPException(status_code=400, detail="You already belong to a family circle")
+    await db.family_members.insert_one({"family_id": invite["family_id"], "user_id": user["id"], "role": "member", "joined_at": now_iso()})
+    await db.family_invites.update_one({"id": invite_id}, {"$set": {"status": "accepted", "updated_at": now_iso()}})
+    return {"message": "Welcome to the family circle"}
+
+
+@api_router.post("/family/invites/{invite_id}/decline")
+async def decline_family_invite(invite_id: str, user: Dict[str, Any] = Depends(current_user)) -> Dict[str, str]:
+    result = await db.family_invites.update_one({"id": invite_id, "email": user.get("email"), "status": "pending"}, {"$set": {"status": "declined", "updated_at": now_iso()}})
+    if not result.matched_count:
+        raise HTTPException(status_code=404, detail="Invite not found")
+    return {"message": "Invite declined"}
+
+
+@api_router.post("/family/leave")
+async def leave_family(user: Dict[str, Any] = Depends(current_user)) -> Dict[str, str]:
+    membership = await db.family_members.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not membership:
+        raise HTTPException(status_code=404, detail="You are not in a family circle")
+    if membership["role"] == "admin":
+        others = await db.family_members.count_documents({"family_id": membership["family_id"], "user_id": {"$ne": user["id"]}})
+        if others:
+            raise HTTPException(status_code=400, detail="Remove other members before closing your circle")
+        await db.families.delete_one({"id": membership["family_id"]})
+        await db.family_invites.delete_many({"family_id": membership["family_id"]})
+    await db.family_members.delete_one({"family_id": membership["family_id"], "user_id": user["id"]})
+    return {"message": "You left the family circle"}
+
+
+@api_router.delete("/family/members/{member_user_id}")
+async def remove_family_member(member_user_id: str, user: Dict[str, Any] = Depends(current_user)) -> Dict[str, str]:
+    membership = await db.family_members.find_one({"user_id": user["id"], "role": "admin"}, {"_id": 0})
+    if not membership:
+        raise HTTPException(status_code=403, detail="Only the circle admin can remove members")
+    if member_user_id == user["id"]:
+        raise HTTPException(status_code=400, detail="Use leave to close your own circle")
+    result = await db.family_members.delete_one({"family_id": membership["family_id"], "user_id": member_user_id})
+    if not result.deleted_count:
+        raise HTTPException(status_code=404, detail="Member not found")
+    return {"message": "Member removed"}
+
+
 @api_router.get("/consents")
 async def get_consents(user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
     consents = await db.consents.find({"user_id": user["id"]}, {"_id": 0, "user_id": 0}).to_list(100)
@@ -588,7 +808,7 @@ async def delete_account(user: Dict[str, Any] = Depends(current_user)) -> Dict[s
         path = PRIVATE_UPLOAD_DIR / upload["storage_name"]
         if path.exists():
             path.unlink()
-    for collection in ["sessions", "assessments", "checkins", "uploads", "appointments", "memberships", "community_posts", "consents"]:
+    for collection in ["sessions", "assessments", "checkins", "uploads", "appointments", "memberships", "community_posts", "consents", "subscriptions", "benefit_claims", "user_blocks", "family_members", "family_invites", "families"]:
         await db[collection].delete_many({"user_id": user_id})
     await db.users.delete_one({"id": user_id})
     return {"message": "Account and private records deleted"}

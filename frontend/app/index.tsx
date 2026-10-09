@@ -9,9 +9,10 @@ import { colors } from "@/src/theme";
 import { HomeScreen } from "@/src/components/home-screen";
 import { Pulse60Screen } from "@/src/components/pulse60-screen";
 import { CareScreen } from "@/src/components/care-screen";
+import { CommunityScreen } from "@/src/components/community-screen";
 import { MoreScreen } from "@/src/components/more-screen";
 
-type Tab = "home" | "pulse" | "care" | "more";
+type Tab = "home" | "pulse" | "care" | "community" | "more";
 
 export default function Index() {
   const [user, setUser] = useState<User | null>(null);
@@ -36,7 +37,7 @@ export default function Index() {
 
 function AppShell({ user, tab, setTab, onLogout }: { user: User; tab: Tab; setTab: (tab: Tab) => void; onLogout: () => Promise<void> }) {
   const insets = useSafeAreaInsets();
-  return <View style={styles.shell}><View style={styles.screen}>{tab === "home" ? <HomeScreen user={user} onNavigate={setTab} /> : null}{tab === "pulse" ? <Pulse60Screen /> : null}{tab === "care" ? <CareScreen /> : null}{tab === "more" ? <MoreScreen user={user} onLogout={onLogout} /> : null}</View><View style={[styles.nav, { paddingBottom: Math.max(insets.bottom, 10) }]}>{(["home", "pulse", "care", "more"] as const).map((item) => <Pressable testID={`nav-${item}`} key={item} onPress={() => setTab(item)} style={styles.navItem}><View style={[styles.navMark, tab === item && styles.navMarkActive]} /><Text style={[styles.navLabel, tab === item && styles.navActive]}>{item === "pulse" ? "Pulse 60" : item[0].toUpperCase() + item.slice(1)}</Text></Pressable>)}</View></View>;
+  return <View style={styles.shell}><View style={styles.screen}>{tab === "home" ? <HomeScreen user={user} onNavigate={setTab} /> : null}{tab === "pulse" ? <Pulse60Screen /> : null}{tab === "community" ? <CommunityScreen user={user} /> : null}{tab === "care" ? <CareScreen /> : null}{tab === "more" ? <MoreScreen user={user} onLogout={onLogout} /> : null}</View><View style={[styles.nav, { paddingBottom: Math.max(insets.bottom, 10) }]}>{(["home", "pulse", "community", "more"] as const).map((item) => <Pressable testID={`nav-${item}`} key={item} onPress={() => setTab(item)} style={styles.navItem}><View style={[styles.navMark, tab === item && styles.navMarkActive]} /><Text style={[styles.navLabel, tab === item && styles.navActive]}>{item === "pulse" ? "Pulse 60" : item[0].toUpperCase() + item.slice(1)}</Text></Pressable>)}</View></View>;
 }
 
 const styles = StyleSheet.create({
