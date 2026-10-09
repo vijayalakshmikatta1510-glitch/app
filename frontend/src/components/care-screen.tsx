@@ -12,7 +12,7 @@ export function CareScreen() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   useEffect(() => { Promise.all([api.doctors(), api.appointments()]).then(([doctorResult, appointmentResult]) => { setDoctors(doctorResult.doctors); setAppointments(appointmentResult.appointments); }).catch(() => setMessage("We could not load care options right now.")).finally(() => setLoading(false)); }, []);
-  return <ScrollView testID="care-screen" style={styles.root} contentContainerStyle={[styles.content, { paddingTop: insets.top + 24 }]}><Text style={styles.eyebrow}>CARE DIRECTORY</Text><Text style={styles.title}>Find the right conversation.</Text><Text style={styles.subtitle}>Pulse only shows professionals stored and verified by your care directory. Booking requests remain pending until confirmed.</Text>{message ? <Text testID="care-error" style={styles.error}>{message}</Text> : null}{loading ? <View style={styles.center}><ActivityIndicator color={colors.brandPrimary} /></View> : doctors.length ? doctors.map((doctor) => <DoctorCard key={doctor.id} doctor={doctor} onBooked={(appointment) => setAppointments((current) => [appointment, ...current])} />) : <View testID="care-empty-state" style={styles.empty}><Text style={styles.emptyTitle}>The directory is empty</Text><Text style={styles.emptyCopy}>No doctor records are available yet. We will not invent credentials, ratings, or availability.</Text></View>}{appointments.length ? <View style={styles.section}><Text style={styles.sectionTitle}>Your requests</Text>{appointments.map((appointment) => <View key={appointment.id} style={styles.appointment}><Text style={styles.appointmentName}>{appointment.doctor_name}</Text><Text style={styles.appointmentDetail}>{appointment.requested_date} · {appointment.consultation_mode}</Text><Text style={styles.pending}>{appointment.status.replace("_", " ")}</Text></View>)}</View> : null}</ScrollView>;
+  return <ScrollView testID="care-screen" style={styles.root} contentContainerStyle={[styles.content, { paddingTop: insets.top + 24 }]}><Text style={styles.eyebrow}>CARE DIRECTORY</Text><Text style={styles.title}>Find the right conversation.</Text><Text style={styles.subtitle}>Pulse only shows professionals stored and verified by your care directory. Booking requests remain pending until confirmed.</Text>{message ? <Text testID="care-error" style={styles.error}>{message}</Text> : null}{loading ? <View style={styles.center}><ActivityIndicator color={colors.brandPrimary} /></View> : doctors.length ? doctors.map((doctor) => <DoctorCard key={doctor.id} doctor={doctor} onBooked={(appointment) => setAppointments((current) => [appointment, ...current])} />) : <View testID="care-empty-state" style={styles.empty}><Text style={styles.emptyTitle}>The directory is empty</Text><Text style={styles.emptyCopy}>No doctor records are available yet. We will not invent credentials, ratings, or availability.</Text></View>}{appointments.length ? <View style={styles.section}><Text style={styles.sectionTitle}>Your requests</Text>{appointments.map((appointment) => <AppointmentRow key={appointment.id} appointment={appointment} onCancelled={(id) => setAppointments((current) => current.filter((item) => item.id !== id))} />)}</View> : null}</ScrollView>;
 }
 
 function DoctorCard({ doctor, onBooked }: { doctor: Doctor; onBooked: (appointment: Appointment) => void }) {
@@ -44,6 +44,37 @@ function DoctorCard({ doctor, onBooked }: { doctor: Doctor; onBooked: (appointme
       <Pressable testID={`care-book-${doctor.id}`} disabled={busy} onPress={book} style={styles.book}>
         <Text style={styles.bookText}>{busy ? "Requesting…" : "Request appointment"}</Text>
       </Pressable>
+    </View>
+  );
+}
+
+function AppointmentRow({ appointment, onCancelled }: { appointment: Appointment; onCancelled: (id: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const cancellable = appointment.status === "pending_confirmation" || appointment.status === "confirmed";
+  const cancel = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await api.cancelAppointment(appointment.id);
+      onCancelled(appointment.id);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "We could not cancel this request.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <View style={styles.appointment}>
+      <Text style={styles.appointmentName}>{appointment.doctor_name}</Text>
+      <Text style={styles.appointmentDetail}>{appointment.requested_date} · {appointment.consultation_mode}</Text>
+      <Text style={styles.pending}>{appointment.status.replace("_", " ")}</Text>
+      {error ? <Text testID="care-cancel-error" style={styles.error}>{error}</Text> : null}
+      {cancellable ? (
+        <Pressable testID={`care-cancel-${appointment.id}`} disabled={busy} onPress={cancel} style={[styles.book, { backgroundColor: colors.surfaceSecondary }]}>
+          <Text style={[styles.bookText, { color: colors.error }]}>{busy ? "Cancelling…" : "Cancel request"}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }

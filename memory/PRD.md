@@ -27,6 +27,15 @@ Pulse is a mobile health-awareness application that helps people build a persona
 6. Database-backed doctors, pending appointment requests, community membership, and consent controls.
 7. Explicit loading, empty, retry/error, and non-diagnostic messaging.
 
+## Implemented 2026-10-09 (feature pass 2, verified)
+
+- **Doctor directory seed**: `backend/scripts/seed_doctors.py` idempotently upserts 6 sample verified directory profiles (multi-speciality/city, `data_source: sample_seed`, availability marked indicative/not real-time) so booking is testable end-to-end. Ran once; directory holds 6 records.
+- **Appointment cancellation**: Care tab shows a one-tap "Cancel request" on pending/confirmed appointments with visible error state; backend verified (book 200 → duplicate 409 → cancel 200 → re-cancel 404 → re-book 200).
+- **Upload reports UI**: new `reports-section.tsx` in Profile & Privacy — photo picker (contextual permission flow with pre-permission explanation, canAskAgain handling, Open Settings fallback) and document picker (JPEG/PNG/PDF, 10 MB), private list with delete, honest empty/error states. Backend verified: magic-byte validation, 415 for wrong type, owner-only download/delete (cross-user 404), unauthenticated 401.
+- **Password reset flow**: "Forgot password?" on login → dev recovery code → new password; backend revokes all sessions on reset (verified: old password 401, new password 200, old token invalidated).
+- **Bug fix**: after logout/re-login the app stayed on the last tab; tab now resets to Home on both login and logout.
+- `expo-image-picker` + `expo-document-picker` installed; app.json plugin permission copy added. JS lint clean, smoke suite 3/3, all flows screenshot-verified on mobile viewport.
+
 ## Implemented 2026-10-09 (remediation pass, verified)
 
 - Acceptance remediation closed: every interactive element and key screen now exposes stable kebab-case `testID` selectors (auth fields/modes/OTP, home/assessment controls, Pulse 60 choices/save, care booking, consents, community join, tab nav, logout).
@@ -35,6 +44,8 @@ Pulse is a mobile health-awareness application that helps people build a persona
 - Appointment booking failures now surface a visible `care-booking-error` message instead of silently resetting; backend 404/409 error shapes verified.
 - Backend verified end-to-end (25 checks): register, wrong-OTP rejection, OTP verify, login, 401 without token, assessment scoring (85) with attention flags, Pulse 60 same-day upsert, timeline, invalid-doctor 404, unknown-cancel 404, consent grant/revoke, cross-user isolation on assessments/appointments, logout invalidation (post-logout 401).
 - `tests/test_smoke.py` hardened to load `EXPO_PUBLIC_BACKEND_URL` from `frontend/.env`; 3/3 passing. JS lint clean.
+
+## Implemented 2026-10-09 (initial build, verified)
 
 - Replaced the starter API with authenticated registration, OTP verification, login, logout, recovery, profile, account deletion, and private authorization endpoints.
 - Added assessment questions/scoring version, independent awareness flags, score history, Pulse 60 persistence/streak calculation, timeline, uploads, doctor/appointment, community, and consent APIs.
@@ -53,7 +64,7 @@ Pulse is a mobile health-awareness application that helps people build a persona
 
 ### P1
 
-- Add report/block/moderation UI, appointment cancellation UI, profile editing, and upload picker UI.
+- Add report/block/moderation UI, profile editing, and doctor-directory filters in the Care tab.
 - Add timezone-aware local-date calculation and a documented rest-day shield policy if product rules are finalized.
 - Add richer community post feed and filter controls for the care directory.
 

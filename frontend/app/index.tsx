@@ -24,13 +24,14 @@ export default function Index() {
 
   const onAuthenticated = async (result: AuthResponse) => {
     await storage.secureSet("pulse.auth.token", result.token);
+    setTab("home");
     setUser(result.user);
   };
 
   if (checking) return <View style={styles.loading}><ActivityIndicator color={colors.brandPrimary} /><Text style={styles.loadingText}>Checking your secure session…</Text></View>;
   if (!user) return <AuthScreen onAuthenticated={onAuthenticated} />;
 
-  return <AppShell user={user} tab={tab} setTab={setTab} onLogout={async () => { await api.logout().catch(() => undefined); await storage.secureRemove("pulse.auth.token"); setUser(null); }} />;
+  return <AppShell user={user} tab={tab} setTab={setTab} onLogout={async () => { await api.logout().catch(() => undefined); await storage.secureRemove("pulse.auth.token"); setTab("home"); setUser(null); }} />;
 }
 
 function AppShell({ user, tab, setTab, onLogout }: { user: User; tab: Tab; setTab: (tab: Tab) => void; onLogout: () => Promise<void> }) {

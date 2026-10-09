@@ -8,11 +8,16 @@ import { colors } from "@/src/theme";
 export function AuthScreen({ onAuthenticated }: { onAuthenticated: (result: AuthResponse) => Promise<void> }) {
   const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<"register" | "login">("register");
-  const [step, setStep] = useState<"form" | "otp">("form");
+  const [step, setStep] = useState<"form" | "otp" | "reset">("form");
   const [form, setForm] = useState({ full_name: "", age: "", gender: "Female", state: "", city: "", phone: "", email: "", password: "" });
   const [otp, setOtp] = useState("");
   const [pendingUserId, setPendingUserId] = useState("");
   const [devOtp, setDevOtp] = useState("");
+  const [resetCode, setResetCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [devResetCode, setDevResetCode] = useState("");
+  const [resetSent, setResetSent] = useState(false);
+  const [resetMessage, setResetMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const update = (key: keyof typeof form, value: string) => setForm((current) => ({ ...current, [key]: value }));
@@ -49,6 +54,36 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: (result: Auth
     }
   };
 
+  const requestReset = async () => {
+    Keyboard.dismiss();
+    setError("");
+    setBusy(true);
+    try {
+      const result = await api.requestReset({ email: form.email });
+      setDevResetCode(result.dev_reset_code ?? "");
+      setResetSent(true);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "We could not start recovery.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmReset = async () => {
+    Keyboard.dismiss();
+    setError("");
+    setResetMessage("");
+    setBusy(true);
+    try {
+      await api.resetPassword({ email: form.email, reset_code: resetCode, new_password: newPassword });
+      setResetMessage("Your password has been updated. You can log in with it now.");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "We could not update your password.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const field = (label: string, key: keyof typeof form, placeholder: string, keyboardType?: "default" | "email-address" | "number-pad" | "phone-pad", secureTextEntry = false) => (
     <View style={styles.field} key={key}>
       <Text style={styles.label}>{label}</Text>
@@ -60,9 +95,35 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: (result: Auth
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.root}>
       <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 28 }]} keyboardShouldPersistTaps="handled">
         <Text style={styles.wordmark}>pulse</Text>
-        <Text style={styles.title}>{step === "otp" ? "Verify your email to continue." : mode === "register" ? "Take control of your health with Pulse." : "Welcome back to Pulse."}</Text>
-        <Text style={styles.subtitle}>{step === "otp" ? "Enter the six-digit development code sent to your email." : "Build your personal health profile and stay aware of what matters most."}</Text>
-        {step === "otp" ? (
+        <Text style={styles.title}>{step === "otp" ? "Verify your email to continue." : step === "reset" ? "Recover your account." : mode === "register" ? "Take control of your health with Pulse." : "Welcome back to Pulse."}</Text>
+        <Text style={styles.subtitle}>{step === "otp" ? "Enter the six-digit development code sent to your email." : step === "reset" ? "We verify it is you before the password changes." : "Build your personal health profile and stay aware of what matters most."}</Text>
+        {step === "reset" ? (
+          <View style={styles.formBlock}>
+            {resetSent ? (
+              <>
+                {devResetCode ? <Text testID="auth-dev-reset-code" style={styles.devCode}>Development recovery code: {devResetCode}</Text> : null}
+                <View style={styles.field}>
+                  <Text style={styles.label}>Recovery code</Text>
+                  <TextInput testID="auth-input-reset-code" value={resetCode} onChangeText={setResetCode} placeholder="6 digits" placeholderTextColor={colors.muted} style={styles.input} keyboardType="number-pad" maxLength={6} />
+                </View>
+                <View style={styles.field}>
+                  <Text style={styles.label}>New password</Text>
+                  <TextInput testID="auth-input-new-password" value={newPassword} onChangeText={setNewPassword} placeholder="At least 8 characters" placeholderTextColor={colors.muted} style={styles.input} secureTextEntry />
+                </View>
+                {error ? <Text testID="auth-error" style={styles.error}>{error}</Text> : null}
+                {resetMessage ? <Text testID="auth-reset-success" style={[styles.error, { color: colors.success }]}>{resetMessage}</Text> : null}
+                <ActionButton testID="auth-reset-confirm" title="Set new password" onPress={confirmReset} busy={busy} />
+              </>
+            ) : (
+              <>
+                {field("Email address", "email", "you@example.com", "email-address")}
+                {error ? <Text testID="auth-error" style={styles.error}>{error}</Text> : null}
+                <ActionButton testID="auth-reset-request" title="Send recovery code" onPress={requestReset} busy={busy} />
+              </>
+            )}
+            <Pressable testID="auth-reset-back" onPress={() => { setStep("form"); setError(""); setResetSent(false); setResetMessage(""); setResetCode(""); setNewPassword(""); }} style={styles.textButton}><Text style={styles.textButtonLabel}>Back to log in</Text></Pressable>
+          </View>
+        ) : step === "otp" ? (
           <View style={styles.formBlock}>
             {devOtp ? <Text testID="auth-dev-otp" style={styles.devCode}>Development verification code: {devOtp}</Text> : null}
             <Text style={styles.label}>Verification code</Text>
@@ -80,6 +141,7 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: (result: Auth
             {field("Password", "password", "At least 8 characters", "default", true)}
             {error ? <Text testID="auth-error" style={styles.error}>{error}</Text> : null}
             <ActionButton testID="auth-submit" title={mode === "register" ? "Register" : "Log in"} onPress={submit} busy={busy} />
+            {mode === "login" ? <Pressable testID="auth-forgot-link" onPress={() => { setStep("reset"); setError(""); }} style={styles.textButton}><Text style={styles.textButtonLabel}>Forgot password?</Text></Pressable> : null}
             <Text style={styles.privacy}>Your health information is private and protected.</Text>
             <Text style={styles.disclaimer}>Pulse supports health awareness and conversation. It does not diagnose or prescribe treatment.</Text>
           </View>

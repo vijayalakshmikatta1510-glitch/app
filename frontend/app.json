@@ -36,6 +36,13 @@
       ],
       "expo-font",
       "expo-image",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Attach report photos to your private health records"
+        }
+      ],
+      "expo-document-picker",
       "expo-secure-store",
       "expo-web-browser",
       "expo-status-bar"
