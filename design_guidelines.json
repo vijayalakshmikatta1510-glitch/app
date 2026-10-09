@@ -1,0 +1,185 @@
+{
+  "app_name": "Pulse",
+  "personality": "3 Editorial Mobile LIGHT",
+  "personality_one_liner": "A calm, authoritative, and human-centered health awareness experience built on editorial clarity and organic warmth.",
+  "color": {
+    "surface": "#F9F8F6",
+    "onSurface": "#1A1A1A",
+    "surfaceSecondary": "#FFFFFF",
+    "onSurfaceSecondary": "#1A1A1A",
+    "surfaceTertiary": "#F0EEE9",
+    "onSurfaceTertiary": "#1A1A1A",
+    "surfaceInverse": "#1C1C1E",
+    "onSurfaceInverse": "#F9F8F6",
+    "brand": "#A34C35",
+    "brandPrimary": "#A34C35",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#8C3D26",
+    "onBrandSecondary": "#FFFFFF",
+    "brandTertiary": "#EAE4DC",
+    "onBrandTertiary": "#5A281B",
+    "success": "#3B6E48",
+    "onSuccess": "#FFFFFF",
+    "warning": "#C27803",
+    "onWarning": "#FFFFFF",
+    "error": "#B23B3B",
+    "onError": "#FFFFFF",
+    "info": "#336699",
+    "onInfo": "#FFFFFF",
+    "border": "#E5E1DB",
+    "borderStrong": "#C8C2B9",
+    "divider": "#EFECE6",
+    "muted": "#76726C",
+    "onBrand": "#FFFFFF"
+  },
+  "typography": {
+    "displayFontFamily": "Playfair Display",
+    "textFontFamily": "Satoshi",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Maintain generous vertical breathing room and magazine-like spacing rhythms with structured editorial containers.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": "0",
+  "navigation": "bottom_tabs",
+  "icon_set": "Ionicons",
+  "glassmorphism": {
+    "enabled": false,
+    "do's": [
+      "Use clean paper-like surfaces and calm editorial dividers."
+    ],
+    "dont's": [
+      "Avoid heavy drop shadows and neon glows."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Auth",
+      "purpose": "Secure authentication and registration with email/password and development OTP simulation.",
+      "states": {
+        "loading": "Checking session and verifying credentials...",
+        "empty": "Enter your email and password to access your health awareness profile.",
+        "error": "Authentication failed. Please check your credentials or register."
+      },
+      "layout": "Clean, editorial form with generous padding, clear validation states, and smooth tab switching between sign-in and registration."
+    },
+    {
+      "name": "Home",
+      "purpose": "Core overview displaying the user's latest Pulse Score, attention flags, and daily check-in status.",
+      "states": {
+        "loading": "Loading your personalized health metrics...",
+        "empty": "No assessment data found. Complete your initial health assessment to generate your Pulse Score.",
+        "error": "Unable to fetch health metrics. Please retry."
+      },
+      "layout": "Vertical magazine feed with hero Pulse Score card, attention flag indicators, quick action buttons, and recent timeline summaries."
+    },
+    {
+      "name": "Assessment",
+      "purpose": "Interactive health awareness questionnaire generating versioned Pulse Scores and attention rules.",
+      "states": {
+        "loading": "Loading assessment questions...",
+        "empty": "No active questionnaire found.",
+        "error": "Failed to submit assessment answers. Please verify and retry."
+      },
+      "layout": "Step-by-step editorial questionnaire with clear progress indicators and instant score calculation on completion."
+    },
+    {
+      "name": "Pulse60",
+      "purpose": "Daily 60-second check-ins tracking streaks, timezones, and seven-day progress.",
+      "states": {
+        "loading": "Loading your check-in history...",
+        "empty": "No check-ins recorded for this week yet.",
+        "error": "Failed to record daily check-in. Please try again."
+      },
+      "layout": "Card-based streak counter with interactive daily check-in button and 7-day progress visualization."
+    },
+    {
+      "name": "Timeline & Uploads",
+      "purpose": "Private health document and report storage with secure download endpoints and validation metadata.",
+      "states": {
+        "loading": "Fetching your health documents...",
+        "empty": "No health reports uploaded yet. Upload your first medical document securely.",
+        "error": "Failed to upload document. Please check file format and size."
+      },
+      "layout": "Chronological list of uploaded medical reports with secure download tokens, thumbnail preview cards, and upload action modal."
+    },
+    {
+      "name": "Doctors & Appointments",
+      "purpose": "Doctor directory and appointment request management with status tracking.",
+      "states": {
+        "loading": "Loading doctor directory...",
+        "empty": "No doctors available in the directory right now.",
+        "error": "Failed to load appointments or doctor list."
+      },
+      "layout": "Card list of verified healthcare providers with specialty badges, direct appointment booking sheet, and pending status tracker."
+    },
+    {
+      "name": "Community",
+      "purpose": "Community discovery, membership, discussions, and moderated health awareness posts.",
+      "states": {
+        "loading": "Loading community discussions...",
+        "empty": "No posts in this community yet. Be the first to share a health awareness topic.",
+        "error": "Failed to load community feed."
+      },
+      "layout": "Feed of community posts with author badges, like/comment actions, membership toggle, and report/moderation tools."
+    },
+    {
+      "name": "Settings & Consent",
+      "purpose": "User profile management, consent grant/revoke controls, and privacy settings.",
+      "states": {
+        "loading": "Loading your profile and consent settings...",
+        "empty": "No profile data available.",
+        "error": "Failed to save profile changes."
+      },
+      "layout": "Clean editorial settings list with explicit consent toggles, profile details editor, and secure logout."
+    }
+  ],
+  "images": {
+    "hero_serene": {
+      "url": "https://images.unsplash.com/photo-1627379432001-700424b38280",
+      "alt": "Serene health awareness portrait"
+    },
+    "wellness_backdrop": {
+      "url": "https://images.unsplash.com/photo-1518708909080-704599b19972",
+      "alt": "Calm wellness lifestyle portrait"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Preserve all existing routes, database integration in backend/server.py, and frontend components in frontend/app/.",
+    "Ensure all screens follow Editorial Mobile LIGHT personality with warm terracotta accents, Playfair Display headers, and Satoshi body typography.",
+    "Implement loading, empty, and error states on every data-driven screen.",
+    "Adhere to touch targets >= 44x44pt and safe area insets at every screen root.",
+    "Ensure all text rendered over images uses the required 3-stop vertical scrim gradient for contrast."
+  ]
+}
